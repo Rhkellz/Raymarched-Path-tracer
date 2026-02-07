@@ -157,7 +157,7 @@ Shader "Custom/PathTracing"
               return length(q)-t.y;
             }
 
-            //reinder
+            // From reinder
             bool box_intersect(float3 ro, float3 rd, out RTrayinfo info, float3 center, float3 rad) {
                 info.dist = 1e20;
                 info.normal = float3(0, 0, 0);
@@ -211,27 +211,18 @@ Shader "Custom/PathTracing"
                 s2.specCol = float3(1.0, 1.0, 1.0);
                 s2.IOR = 1.0;
     
-                // Light Panel (emissive)
-                ObjData lightPanel;
-                lightPanel.sdf = sdfBox(p, float3(0.0, 0.74, 0.0), float3(0.25, 0.001, 0.25));
-                lightPanel.color = float3(0.0, 0.0, 0.0);
-                lightPanel.emission = float3(10.0, 10.0, 10.0);
-                lightPanel.pSpec = 0.0;
-                lightPanel.roughness = 0.0;
-                lightPanel.specCol = float3(1.0, 1.0, 1.0);
-                lightPanel.IOR = 1.0;
+                
 
                 float2 smoothBlend = smin(s1.sdf, s2.sdf, _Smoothing);
                 res.sdf = smoothBlend.x;
                 res.color = lerp(s1.color, s2.color, smoothBlend.y);
-                res.emission = float3(0.0, 0.0, 0.0);
+                res.emission = float3(0, 0, 0);
                 res.pSpec = lerp(s1.pSpec, s2.pSpec, smoothBlend.y);
                 res.roughness = lerp(s1.roughness, s2.roughness, smoothBlend.y);
                 res.specCol = lerp(s1.specCol, s2.specCol, smoothBlend.y);
                 res.IOR = lerp(s1.IOR, s2.IOR, smoothBlend.y);
 
-                if (lightPanel.sdf < res.sdf)
-                    res = lightPanel;
+                
 
                 res.isRT = 0;
                 res.RTinfo.dist = 0;
@@ -294,6 +285,18 @@ Shader "Custom/PathTracing"
                     if (tempInfo.dist < res.RTinfo.dist) {
                         res.RTinfo = tempInfo;
                         res.color = float3(1, 1, 1);
+                    }
+                }
+                //Light
+
+                center = float3(0, 0.74, 0);
+                rad = float3(0.25, 1e-4, 0.25);
+                if (box_intersect(ro, rd, tempInfo, center, rad)) {
+                    if (tempInfo.dist < res.RTinfo.dist) {
+                        res.RTinfo = tempInfo;
+                        res.color = float3(0.0, 0.0, 0.0);
+                        res.emission = float3(10.0, 10.0, 10.0);
+                        res.specCol = float3(1.0, 1.0, 1.0);
                     }
                 }
     
@@ -369,13 +372,22 @@ Shader "Custom/PathTracing"
             }
 
             // Path tracing color calculation
-            float3 calcColor(float3 ro, float3 rd, inout uint rngState, inout int cnt) {
+            float3 calcColor(v2f i, inout uint rngState, inout int cnt) {
                 float3 totalCol = float3(0.0, 0.0, 0.0);
                 
                 for (int sample = 0; sample < _SAMPLES; sample++) {
                     uint sampleRng = rngState ^ (sample * 0x9E3779B9u);
-                    float3 ro_ = ro;
-                    float3 rd_ = rd;
+
+                    //Jitter/stratisfy
+                    float2 jitter = float2(frand(sampleRng), frand(sampleRng)) - 0.5;
+                    float2 pixelCoord = i.uv * _ScreenParams.xy;
+                    float2 pixel = pixelCoord + jitter;
+                    float2 jitteredUV = pixel / _ScreenParams.xy;
+    
+                    float3 viewVector = mul(_CameraInverseProjection, float4(jitteredUV * 2 - 1, 0, -1));
+                    float3 rd_ = normalize(mul(unity_CameraToWorld, float4(viewVector, 0)));
+                    float3 ro_ = unity_CameraToWorld._m03_m13_m23;
+    
                     float3 throughput = float3(1.0, 1.0, 1.0);
                     
                     for (int bounce = 0; bounce < _BOUNCES + 1; bounce++) {
@@ -442,21 +454,9 @@ Shader "Custom/PathTracing"
 				uint2 pixCoord = i.uv * numPixels;//stop redef later
 				uint pixelIndex = pixCoord.y * numPixels.x + pixCoord.x;
 				uint rngState = pixelIndex + _FrameIndex * 719393;
-    
-                // Add jittering for anti-aliasing
-                float2 jitter = float2(frand(rngState), frand(rngState)) - 0.5;
-                float2 pixelCoord = i.uv * _ScreenParams.xy; // uv to pixel coordinates
-                float2 pixel = pixelCoord + jitter;
-                float2 jitteredUV = pixel / _ScreenParams.xy; // back to UV
-    
-                // Recalculate view ray with jittered UV
-                float3 viewVector = mul(_CameraInverseProjection, float4(jitteredUV * 2 - 1, 0, -1));
-                float3 viewVectorWorld = mul(unity_CameraToWorld, float4(viewVector, 0));
-    
-                float3 ro = unity_CameraToWorld._m03_m13_m23;
-                float3 rd = normalize(viewVectorWorld);
+                
                 int cnt = 0;
-                float3 col = calcColor(ro, rd, rngState, cnt);
+                float3 col = calcColor(i, rngState, cnt);
 
                 if (_Param > 0) {
                     float3 testCol = (float(cnt) / 150).xxx;
@@ -476,7 +476,7 @@ Shader "Custom/PathTracing"
                 }
                 
                 return float4(col, 1.0);
-                //TODO: sdf bounding boxes for raytracing, PBR, MIS, better pipeline for sdfs
+                //TODO: sdf bounding boxes for raytracing, PBR, MIS, better pipeline for sdfs, volumetrics, tent filter for pixel filtering
             }
             ENDCG
         }

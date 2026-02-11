@@ -287,15 +287,15 @@ Shader "Custom/PathTracing"
                         res.color = float3(1, 1, 1);
                     }
                 }
-                //Light
 
+                //Light
                 center = float3(0, 0.74, 0);
                 rad = float3(0.25, 1e-4, 0.25);
                 if (box_intersect(ro, rd, tempInfo, center, rad)) {
                     if (tempInfo.dist < res.RTinfo.dist) {
                         res.RTinfo = tempInfo;
                         res.color = float3(0.0, 0.0, 0.0);
-                        res.emission = float3(10.0, 10.0, 10.0);
+                        res.emission = float3(5.0, 5.0, 5.0);
                         res.specCol = float3(1.0, 1.0, 1.0);
                     }
                 }
@@ -429,7 +429,6 @@ Shader "Custom/PathTracing"
                         float rayProbability = (doSpecular == 1.0) ? specularChance : 1.0 - specularChance;
                         rayProbability = max(rayProbability, 0.001);
 
-
                         float3 specularRayDir = reflect(rd_, normal);
                         specularRayDir = normalize(lerp(specularRayDir, diffuse, hit.roughness * hit.roughness));
                         rd_ = lerp(diffuse, specularRayDir, doSpecular);
@@ -476,7 +475,7 @@ Shader "Custom/PathTracing"
                 }
                 
                 return float4(col, 1.0);
-                //TODO: sdf bounding boxes for raytracing, PBR, MIS, better pipeline for sdfs, volumetrics, tent filter for pixel filtering
+                //TODO: sdf bounding boxes for raytracing, PBR, MIS, better pipeline for sdfs, volumetrics, tent filter for pixel filtering, specular in BRDF, denoiser
             }
             ENDCG
         }

@@ -272,8 +272,8 @@ MonoBehaviour:
   PTShader: {fileID: 4800000, guid: 8b3a510e8ad8cc543856226999817538, type: 3}
   sphere1: {fileID: 925056668}
   sphere2: {fileID: 786443646}
-  samplesPerPixel: 4
-  maxBounces: 10
+  samplesPerPixel: 20
+  maxBounces: 20
   smoothing: 0.05
   testParam: 0
   useProgressive: 0
@@ -729,7 +729,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5968578203787548155, guid: 2a263cfdc84ae53498ac9909cca0d174, type: 3}
       propertyPath: logWrite
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5968578203787548155, guid: 2a263cfdc84ae53498ac9909cca0d174, type: 3}
       propertyPath: highestPossibleFPS

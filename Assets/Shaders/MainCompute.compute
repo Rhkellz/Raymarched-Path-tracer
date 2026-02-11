@@ -1,0 +1,178 @@
+#pragma kernel CSMain
+
+#include "Utils.hlsl"
+#include "GeometryFuncs.hlsl"
+RWTexture2D<float4> Result;
+Texture2D<float4> _PreviousFrame;
+SamplerState samplerLinear;
+
+
+float4x4 _CameraToWorld;
+float4x4 _CameraInverseProjection;
+
+  // Ray marching
+ObjData raymarch(float3 ro, float3 rd, inout float3 pos, inout int cnt) {
+    pos = float3(0, 0, 0);
+                
+    ObjData RTdata = raytraceScene(ro, rd);
+    float t = 0.0;
+    for (int i = 0; i < 500; i++)
+    {
+        cnt++;
+        float3 p = ro + rd * t;
+        ObjData d = map(p);
+                    
+        if (d.sdf < 0.0005)
+        {
+            if (RTdata.RTinfo.didHit == 1 && RTdata.RTinfo.dist < t)
+            {
+                pos = ro + rd * RTdata.RTinfo.dist;
+                RTdata.sdf = RTdata.RTinfo.dist;
+                return RTdata;
+            }
+            pos = p;
+            d.sdf = t;
+            return d;
+        }
+                    
+        t += d.sdf;
+                    
+        if (t > 50)
+        {
+            break;
+        }
+    }
+
+                //pos = ro + rd * 100.0;
+    if (RTdata.RTinfo.didHit == 1)
+    {
+        pos = ro + rd * RTdata.RTinfo.dist;
+        RTdata.sdf = RTdata.RTinfo.dist; //set sdf so its not -1
+        return RTdata;
+    }
+                // Return miss
+    return makeEmptyObjData();
+}
+
+ // Path tracing color calculation
+float3 calcColor(uint3 id, inout uint rngState, inout int cnt) {
+    float3 totalCol = float3(0.0, 0.0, 0.0);
+                
+    for (int sample = 0; sample < _SAMPLES; sample++)
+    {
+        uint sampleRng = rngState ^ (sample * 0x9E3779B9u);
+
+        //Jitter/stratisfy
+        float2 jitter = float2(frand(sampleRng), frand(sampleRng));
+        float2 uv = (id.xy + jitter) / float2(_Width, _Height);
+        float2 d = uv * 2.0 - 1.0;
+
+        float4 target = mul(_CameraInverseProjection, float4(d, 0, 1));
+        target /= target.w;
+
+        float3 rd_ = normalize(mul(_CameraToWorld, float4(target.xyz, 0)).xyz);
+        float3 ro_ = _CameraToWorld._m03_m13_m23;
+        
+        float3 throughput = float3(1.0, 1.0, 1.0);
+                    
+        for (int bounce = 0; bounce < _BOUNCES + 1; bounce++)
+        {
+            float3 pos;
+            ObjData hit = raymarch(ro_, rd_, pos, cnt);
+                        
+                        //Ray missed
+            if (hit.sdf < 0.0)
+            {
+                totalCol += throughput * float3(0.1, 0.1, 0.1);
+                break;
+            }
+
+            float3 normal;
+            if (hit.isRT == 1)
+            {
+                normal = hit.RTinfo.normal;
+                if (dot(normal, rd_) > 0.0)
+                {
+                    normal = -normal;
+                }
+            }
+            else
+            {
+                normal = estimateNormal(pos);
+            }
+                        
+                        //Hit emissive surface
+            if (length(hit.emission) > 0.0)
+            {
+                totalCol += throughput * hit.emission;
+                break;
+            }
+
+            float3 diffuse = getBRDF(pos, normal, rd_, sampleRng);
+
+                        //Apply fresnel
+                        
+            float specularChance = hit.pSpec;
+            if (specularChance > 0.0)
+            {
+                specularChance = FresnelReflectAmount(1.0, hit.IOR, rd_, normal, hit.pSpec, 1.0);
+            }
+            float doSpecular = (frand(sampleRng) < specularChance) ? 1.0 : 0.0;
+
+            float rayProbability = (doSpecular == 1.0) ? specularChance : 1.0 - specularChance;
+            rayProbability = max(rayProbability, 0.001);
+
+            float3 specularRayDir = reflect(rd_, normal);
+            specularRayDir = normalize(lerp(specularRayDir, diffuse, hit.roughness * hit.roughness));
+            rd_ = lerp(diffuse, specularRayDir, doSpecular);
+
+            float cosTheta = max(dot(normal, rd_), 0.0);
+            throughput *= hit.color * cosTheta;
+            ro_ = pos + normal * 0.001;
+            throughput /= rayProbability;
+                        //Russian roulette
+            float p = max(throughput.x, max(throughput.y, throughput.z));
+            if (frand(sampleRng) > p)
+            {
+                break;
+            }
+
+            throughput *= 1.0 / p;
+        }
+    }
+                
+    return totalCol / float(_SAMPLES);
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height)
+        return;
+
+    uint pixelIndex = id.y * _Width + id.x;
+    uint rngState = pixelIndex ^ (_FrameIndex * 9781u);
+
+    int cnt = 0;
+    float3 col = calcColor(id, rngState, cnt); // your path tracing function
+
+    // TEST PARAM
+    if (_Param > 0)
+    {
+        float3 testCol = (float(cnt) / 150).xxx;
+        if (cnt > 150)
+            testCol = float3(1, 0, 1);
+        col = testCol;
+    }
+
+    // ACCUMULATION
+    if (_useAccumulation == 1 && _CurrentSample > 0) {
+        float3 prev = _PreviousFrame.Load(int3(id.xy, 0)).rgb; // Use Load for compute shader
+        float blend = 1.0 / (_CurrentSample + 1.0);
+        if (_sceneMoving == 1)
+            blend = 1.0; // reset accumulation
+        col = lerp(prev, col, blend);
+    }
+
+    Result[id.xy] = float4(col, 1.0);
+}

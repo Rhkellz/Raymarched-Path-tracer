@@ -2,10 +2,16 @@ using UnityEngine;
 
 [RequireComponent(typeof(Camera))]
 [ImageEffectAllowedInSceneView]
-public class PathTracingMaster : MonoBehaviour {
-    public Shader PTShader;
-    private Material PTMaterial;
+public class PathTracingCompute : MonoBehaviour {
+    public ComputeShader pathTracingCS;
+
     private Camera cam;
+
+    private RenderTexture[] accumulationTextures = new RenderTexture[2];
+    private int currentRT = 0;
+    private int currentSample = 0;
+    private int frameIndex = 0;
+
     private Vector3 camLastPos;
     private Quaternion camLastRot;
     private Vector3 sphere1LastPos;
@@ -27,66 +33,28 @@ public class PathTracingMaster : MonoBehaviour {
     [Range(0, 1)]
     public int testParam = 0;
 
-    [Header("Progressive Rendering")]
-    public bool useProgressive = true;
-
-    private RenderTexture[] accumulationTextures = new RenderTexture[2];
-    private int currentRT = 0;
-    private int currentSample = 0;
-    private int frameIndex = 0;
+    public bool useAccumulation = true;
 
     void Awake() {
         cam = GetComponent<Camera>();
         camLastPos = transform.position;
         camLastRot = transform.rotation;
-        if (sphere1 != null) {
-            sphere1LastPos = sphere1.position;
-        }
-        if (sphere2 != null) {
-            sphere2LastPos = sphere2.position;
-        }
+        if (sphere1) sphere1LastPos = sphere1.position;
+        if (sphere2) sphere2LastPos = sphere2.position;
         smoothingLastVal = smoothing;
     }
 
     void OnRenderImage(RenderTexture source, RenderTexture destination) {
-        if (PTMaterial == null) {
-            PTMaterial = new Material(PTShader);
-            PTMaterial.hideFlags = HideFlags.HideAndDontSave;
-        }
+        InitRenderTextures();
 
-        if (useProgressive) {
-            RenderProgressive(source, destination);
-        } else {
-            RenderDirect(source, destination);
-        }
-
-        frameIndex++;
-    }
-
-    void RenderProgressive(RenderTexture source, RenderTexture destination) {
-        // Ensure RTs are initialized
-        for (int i = 0; i < 2; i++) {
-            if (accumulationTextures[i] == null ||
-                accumulationTextures[i].width != Screen.width ||
-                accumulationTextures[i].height != Screen.height) {
-
-                if (accumulationTextures[i] != null)
-                    accumulationTextures[i].Release();
-
-                accumulationTextures[i] = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
-                accumulationTextures[i].enableRandomWrite = true;
-                accumulationTextures[i].Create();
-                Graphics.Blit(Texture2D.blackTexture, accumulationTextures[i]);
-            }
-        }
-
-        //check cam movement
-        if (camLastPos != transform.position || camLastRot != transform.rotation || sphere1.position != sphere1LastPos || sphere2.position != sphere2LastPos || smoothing != smoothingLastVal) {
+        // Check for camera or scene movement
+        if (camLastPos != transform.position || camLastRot != transform.rotation ||
+            sphere1.position != sphere1LastPos || sphere2.position != sphere2LastPos ||
+            smoothing != smoothingLastVal) {
             sceneMoving = 1;
             currentSample = 0;
-        } else {
-            sceneMoving = 0;
-        }
+        } else sceneMoving = 0;
+
         camLastPos = transform.position;
         camLastRot = transform.rotation;
         sphere1LastPos = sphere1.position;
@@ -95,53 +63,72 @@ public class PathTracingMaster : MonoBehaviour {
 
         int prevRT = 1 - currentRT;
 
-        SetShaderParameters();
-        PTMaterial.SetInt("_camMoving", sceneMoving);
-        PTMaterial.SetInt("_UseAccumulation", 1);
-        PTMaterial.SetFloat("_CurrentSample", currentSample);
-        PTMaterial.SetTexture("_PreviousFrame", accumulationTextures[prevRT]);
+        // Set all compute shader parameters
+        SetShaderParameters(accumulationTextures[prevRT]);
 
-        // Render current frame into current RT
-        Graphics.Blit(source, accumulationTextures[currentRT], PTMaterial);
+        // Dispatch compute shader
+        int kernel = pathTracingCS.FindKernel("CSMain");
+        int threadGroupsX = Mathf.CeilToInt(Screen.width / 8.0f);
+        int threadGroupsY = Mathf.CeilToInt(Screen.height / 8.0f);
+        pathTracingCS.Dispatch(kernel, threadGroupsX, threadGroupsY, 1);
 
-        // Output to screen
+        // Blit to screen
         Graphics.Blit(accumulationTextures[currentRT], destination);
 
-        // Swap RTs for next frame
+        // Swap RTs
         currentRT = prevRT;
         currentSample++;
+        frameIndex++;
     }
 
-    void RenderDirect(RenderTexture source, RenderTexture destination) {
-        SetShaderParameters();
-        PTMaterial.SetInt("_UseAccumulation", 0);
-        Graphics.Blit(source, destination, PTMaterial);
+    void InitRenderTextures() {
+        for (int i = 0; i < 2; i++) {
+            if (accumulationTextures[i] == null ||
+                accumulationTextures[i].width != Screen.width ||
+                accumulationTextures[i].height != Screen.height) {
+                if (accumulationTextures[i] != null)
+                    accumulationTextures[i].Release();
+
+                accumulationTextures[i] = new RenderTexture(Screen.width, Screen.height, 0,
+                    RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+                accumulationTextures[i].enableRandomWrite = true;
+                accumulationTextures[i].Create();
+            }
+        }
     }
 
-    void SetShaderParameters() {
-        PTMaterial.SetMatrix("_CameraToWorld", cam.cameraToWorldMatrix);
-        PTMaterial.SetMatrix("_CameraInverseProjection", cam.projectionMatrix.inverse);
+    void SetShaderParameters(RenderTexture prevFrame) {
+        pathTracingCS.SetTexture(0, "Result", accumulationTextures[currentRT]);
+        pathTracingCS.SetTexture(0, "_PreviousFrame", prevFrame);
 
-        PTMaterial.SetVector("_Sphere1", sphere1.position);
-        PTMaterial.SetVector("_Sphere2", sphere2.position);
+        pathTracingCS.SetInt("_Width", Screen.width);
+        pathTracingCS.SetInt("_Height", Screen.height);
 
-        PTMaterial.SetInt("_SAMPLES", samplesPerPixel);
-        PTMaterial.SetInt("_BOUNCES", maxBounces);
-        PTMaterial.SetInt("_FrameIndex", frameIndex);
-        PTMaterial.SetFloat("_Smoothing", smoothing);
-        PTMaterial.SetFloat("_Param", testParam);
-    }
+        pathTracingCS.SetMatrix("_CameraToWorld", cam.cameraToWorldMatrix);
+        pathTracingCS.SetMatrix("_CameraInverseProjection", cam.projectionMatrix.inverse);
 
-    public void ResetProgressive() {
-        currentSample = 0;
-        currentRT = 0;
+        pathTracingCS.SetVector("_Sphere1", sphere1.position);
+        pathTracingCS.SetVector("_Sphere2", sphere2.position);
+
+        pathTracingCS.SetInt("_SAMPLES", samplesPerPixel);
+        pathTracingCS.SetInt("_BOUNCES", maxBounces);
+        pathTracingCS.SetInt("_FrameIndex", frameIndex);
+        pathTracingCS.SetFloat("_Smoothing", smoothing);
+        pathTracingCS.SetFloat("_Param", testParam);
+
+        pathTracingCS.SetInt("_sceneMoving", sceneMoving);
+        pathTracingCS.SetInt("_useAccumulation", 1);
+        pathTracingCS.SetFloat("_CurrentSample", currentSample);
+        if (useAccumulation) {
+            pathTracingCS.SetInt("_useAccumulation", 1);
+        } else {
+            pathTracingCS.SetInt("_useAccumulation", 0);
+        }
     }
 
     void OnDestroy() {
-        for (int i = 0; i < 2; i++) {
-            if (accumulationTextures[i] != null) {
+        for (int i = 0; i < 2; i++)
+            if (accumulationTextures[i] != null)
                 accumulationTextures[i].Release();
-            }
-        }
     }
 }

@@ -206,13 +206,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: 0, y: 0, z: 1.527}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: -4.1}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &330585547
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -269,12 +269,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3187b660d7f8ef42b43b28dde508a35, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RayTracingMaster
-  pathTracingCS: {fileID: 7200000, guid: f8c1722c347c5484f88a911b00b7bd05, type: 3}
+  pathTracingCS: {fileID: 7200000, guid: 061047408b59c634aac645a38754b72f, type: 3}
   sphere1: {fileID: 925056668}
   sphere2: {fileID: 786443646}
-  samplesPerPixel: 5
-  maxBounces: 5
-  smoothing: 0.0476
+  samplesPerPixel: 20
+  maxBounces: 20
+  smoothing: 0.005
   testParam: 0
   useAccumulation: 1
 --- !u!1 &786443642
@@ -360,7 +360,7 @@ Transform:
   m_GameObject: {fileID: 786443642}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.5, y: 0, z: 0}
+  m_LocalPosition: {x: 0.2, y: 0, z: 0}
   m_LocalScale: {x: 0.4, y: 0.4, z: 0.4}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -449,8 +449,8 @@ Transform:
   m_GameObject: {fileID: 925056664}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.5, y: 0, z: 0}
-  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
+  m_LocalPosition: {x: -0.81, y: 0, z: -0.73}
+  m_LocalScale: {x: 0.4, y: 0.4, z: 0.4}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}

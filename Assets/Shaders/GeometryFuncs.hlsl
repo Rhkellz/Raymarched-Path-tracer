@@ -17,6 +17,44 @@ float sdfTorus(float3 p, float2 t) {
     return length(q) - t.y;
 }
 
+float sdfCone(float3 p, float2 c, float h) {
+  // c is the sin/cos of the angle, h is height
+  // Alternatively pass q instead of (c,h),
+  // which is the point at the base in 2D
+    float2 q = h * float2(c.x / c.y, -1.0);
+    
+    float2 w = float2(length(p.xz), p.y);
+    float2 a = w - q * clamp(dot(w, q) / dot(q, q), 0.0, 1.0);
+    float2 b = w - q * float2(clamp(w.x / q.x, 0.0, 1.0), 1.0);
+    float k = sign(q.y);
+    float d = min(dot(a, a), dot(b, b));
+    float s = max(k * (w.x * q.y - w.y * q.x), k * (w.y - q.y));
+    return sqrt(d) * sign(s);
+}
+
+float dot2(in float3 v) { return dot(v, v); }
+float sdfRoundCone(float3 p, float3 a, float3 b, float r1, float r2) {
+    float3 ba = b - a;
+    float l2 = dot(ba, ba);
+    float rr = r1 - r2;
+    float a2 = l2 - rr * rr;
+    float il2 = 1.0 / l2;
+    
+    float3 pa = p - a;
+    float y = dot(pa, ba);
+    float z = y - l2;
+    float x2 = dot2(pa * l2 - ba * y);
+    float y2 = y * y * l2;
+    float z2 = z * z * l2;
+
+    float k = sign(rr) * rr * rr * x2;
+    if (sign(z) * a2 * z2 > k)
+        return sqrt(x2 + z2) * il2 - r2;
+    if (sign(y) * a2 * y2 < k)
+        return sqrt(x2 + y2) * il2 - r1;
+    return (sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+}
+
 float2 smin(float a, float b, float k) {
     float h = 1.0 - min(abs(a - b) / (4.0 * k), 1.0);
     float w = h * h;

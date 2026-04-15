@@ -11,15 +11,14 @@ float4x4 _CameraToWorld;
 float4x4 _CameraInverseProjection;
 
   // Ray marching
-ObjData raymarch(float3 ro, float3 rd, inout float3 pos, inout int cnt) {
+ObjData raymarch(float3 ro, float3 rd, inout float3 pos) {
     pos = float3(0, 0, 0);
                 
     ObjData RTdata = raytraceScene(ro, rd);
     float t = 0.0;
     for (int i = 0; i < 500; i++)
     {
-        cnt++;
-        float3 p = ro + rd * t;
+        float3 p = ro + rd * t;// Sphere tracing
         ObjData d = map(p);
                     
         if (d.sdf < 0.0005)
@@ -54,15 +53,101 @@ ObjData raymarch(float3 ro, float3 rd, inout float3 pos, inout int cnt) {
     return makeEmptyObjData();
 }
 
- // Path tracing color calculation
-float3 calcColor(uint3 id, inout uint rngState, inout int cnt) {
+
+float3 reflectedRadiance(float3 ro, float3 rd, uint sampleRng) {
+    int rrDepth = 5;
+    float survProb = 0.9;
+    
+    float3 rad = float3(0.0, 0.0, 0.0);
+    float3 throughput = float3(1.0, 1.0, 1.0);
+    bool flag = true;
+    
+    for (int bounce = 0; bounce < _BOUNCES; bounce++) {
+        float3 pos;
+        ObjData hit = raymarch(ro, rd, pos);
+        
+        if (hit.sdf < 0.0) {
+            rad += throughput * float3(0.1, 0.1, 0.1);
+            break;
+        }
+        
+        float3 normal;
+        if (hit.isRT == 1) {
+            normal = hit.RTinfo.normal;
+            if (dot(normal, rd) > 0.0) {
+                normal = -normal;
+            }
+        } else {
+            normal = estimateNormal(pos);
+        }
+        
+        // flag prevents double counting with NEE
+        if (length(hit.emission) > 0.0) {
+            if (flag)
+                rad += throughput * hit.emission;
+            break;
+        }
+        
+        float specularChance = hit.pSpec;
+        if (specularChance > 0.0) {
+            specularChance = FresnelReflectAmount(1.0, hit.IOR, rd, normal, hit.pSpec, 1.0);
+        }
+            
+        float doSpecular = (frand(sampleRng) < specularChance) ? 1.0 : 0.0;
+        
+        // temp
+        ObjData lightObj = makeEmptyObjData();
+        lightObj.emission = float3(5.0, 5.0, 5.0);
+        lightObj.Linfo.rad = 0.2;
+        lightObj.Linfo.pos = float3(0, 1.1, 0);
+        
+        // direct lighting
+        bool newFlag = true;
+        float diffuseChance = 1.0 - specularChance;
+        if (diffuseChance > 0.0) {
+            newFlag = false;
+            float dpdf;
+            float3 lightPos = sampleLight(lightObj, dpdf, sampleRng);
+            float3 lightNormal = normalize(lightPos - lightObj.Linfo.pos);
+            float3 lightDir = normalize(lightPos - pos); // renamed
+    
+            if (isVisible(pos, lightPos)) {
+                float dist2 = dot(lightPos - pos, lightPos - pos);
+                float cosx = max(0.0, dot(normal, lightDir));
+                float cosy = max(0.0, dot(lightNormal, -lightDir));
+                float3 brdfVal = evalBRDF(hit, normal, -rd, lightDir);
+                rad += throughput * lightObj.emission * brdfVal * cosx * cosy * diffuseChance / (dpdf * dist2);
+            }
+        }
+
+        float pdf;
+        float3 w_i = float3(0.0, 0.0, 0.0);
+        sampleBRDF(normal, -rd, w_i, pdf, sampleRng);
+        float cosTheta = max(0.0, dot(normal, w_i));
+
+        // --- Russian roulette ---
+        float p = (bounce >= rrDepth) ? survProb : 1.0;
+        if (frand(sampleRng) > p)
+            break;
+        
+        throughput *= evalBRDF(hit, normal, -rd, w_i) * cosTheta / (p * pdf);
+        
+        // Advance ray
+        ro = pos + normal * 0.001;
+        rd = w_i;
+        flag = newFlag;
+    }
+    
+    return rad;
+}
+
+float3 calcColor(uint3 id, inout uint rngState) {
     float3 totalCol = float3(0.0, 0.0, 0.0);
                 
-    for (int sample = 0; sample < _SAMPLES; sample++)
-    {
+    for (int sample = 0; sample < _SAMPLES; sample++) {
         uint sampleRng = rngState ^ (sample * 0x9E3779B9u);
 
-        //Jitter/stratisfy
+        // Jitter/stratisfy
         float2 jitter = float2(frand(sampleRng), frand(sampleRng));
         float2 uv = (id.xy + jitter) / float2(_Width, _Height);
         float2 d = uv * 2.0 - 1.0;
@@ -72,75 +157,19 @@ float3 calcColor(uint3 id, inout uint rngState, inout int cnt) {
 
         float3 rd_ = normalize(mul(_CameraToWorld, float4(target.xyz, 0)).xyz);
         float3 ro_ = _CameraToWorld._m03_m13_m23;
-        
-        float3 throughput = float3(1.0, 1.0, 1.0);
                     
-        for (int bounce = 0; bounce < _BOUNCES + 1; bounce++)
-        {
-            float3 pos;
-            ObjData hit = raymarch(ro_, rd_, pos, cnt);
-                        
-                        //Ray missed
-            if (hit.sdf < 0.0)
-            {
-                totalCol += throughput * float3(0.1, 0.1, 0.1);
-                break;
-            }
-
-            float3 normal;
-            if (hit.isRT == 1)
-            {
-                normal = hit.RTinfo.normal;
-                if (dot(normal, rd_) > 0.0)
-                {
-                    normal = -normal;
-                }
-            }
-            else
-            {
-                normal = estimateNormal(pos);
-            }
-                        
-                        //Hit emissive surface
-            if (length(hit.emission) > 0.0)
-            {
-                totalCol += throughput * hit.emission;
-                break;
-            }
-
-            float3 diffuse = getBRDF(pos, normal, rd_, sampleRng);
-
-                        //Apply fresnel
-                        
-            float specularChance = hit.pSpec;
-            if (specularChance > 0.0)
-            {
-                specularChance = FresnelReflectAmount(1.0, hit.IOR, rd_, normal, hit.pSpec, 1.0);
-            }
-            float doSpecular = (frand(sampleRng) < specularChance) ? 1.0 : 0.0;
-
-            float rayProbability = (doSpecular == 1.0) ? specularChance : 1.0 - specularChance;
-            rayProbability = max(rayProbability, 0.001);
-
-            float3 specularRayDir = reflect(rd_, normal);
-            specularRayDir = normalize(lerp(specularRayDir, diffuse, hit.roughness * hit.roughness));
-            rd_ = lerp(diffuse, specularRayDir, doSpecular);
-
-            float cosTheta = max(dot(normal, rd_), 0.0);
-            throughput *= hit.color * cosTheta;
-            ro_ = pos + normal * 0.001;
-            throughput /= rayProbability;
-                        //Russian roulette
-            float p = max(throughput.x, max(throughput.y, throughput.z));
-            if (frand(sampleRng) > p)
-            {
-                break;
-            }
-
-            throughput *= 1.0 / p;
+        float3 pos;
+        ObjData hit = raymarch(ro_, rd_, pos);
+        
+        if (hit.sdf < 0.0) {
+            totalCol += float3(0.1, 0.1, 0.1); // bg color
+            continue;
         }
+        
+        totalCol += hit.emission + reflectedRadiance(ro_, rd_, rngState);
+
     }
-                
+    
     return totalCol / float(_SAMPLES);
 }
 
@@ -153,18 +182,8 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     uint pixelIndex = id.y * _Width + id.x;
     uint rngState = pixelIndex ^ (_FrameIndex * 9781u);
 
-    int cnt = 0;
-    float3 col = calcColor(id, rngState, cnt); // your path tracing function
-
-    // TEST PARAM
-    if (_Param > 0)
-    {
-        float3 testCol = (float(cnt) / 150).xxx;
-        if (cnt > 150)
-            testCol = float3(1, 0, 1);
-        col = testCol;
-    }
-
+    float3 col = calcColor(id, rngState);
+    
     // ACCUMULATION
     if (_useAccumulation == 1 && _CurrentSample > 0) {
         float3 prev = _PreviousFrame.Load(int3(id.xy, 0)).rgb; // Use Load for compute shader
@@ -173,6 +192,6 @@ void CSMain(uint3 id : SV_DispatchThreadID)
             blend = 1.0; // reset accumulation
         col = lerp(prev, col, blend);
     }
-
+    
     Result[id.xy] = float4(col, 1.0);
 }

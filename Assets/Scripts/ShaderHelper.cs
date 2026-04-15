@@ -28,7 +28,7 @@ public class PathTracingCompute : MonoBehaviour {
     public int samplesPerPixel = 1;
     [Range(1, 100)]
     public int maxBounces = 4;
-    [Range(0f, 1f)]
+    [Range(0f, 0.2f)]
     public float smoothing = 0.1f;
     [Range(0, 1)]
     public int testParam = 0;
@@ -67,7 +67,7 @@ public class PathTracingCompute : MonoBehaviour {
         SetShaderParameters(accumulationTextures[prevRT]);
 
         // Dispatch compute shader
-        int kernel = pathTracingCS.FindKernel("CSMain");
+        int kernel = pathTracingCS.FindKernel("CSRewrite");
         int threadGroupsX = Mathf.CeilToInt(Screen.width / 8.0f);
         int threadGroupsY = Mathf.CeilToInt(Screen.height / 8.0f);
         pathTracingCS.Dispatch(kernel, threadGroupsX, threadGroupsY, 1);

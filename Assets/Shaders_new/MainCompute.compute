@@ -1,0 +1,166 @@
+#pragma kernel CSRewrite
+
+#include "Common.hlsl"
+#include "Scene.hlsl"
+#include "GeometryFuncs.hlsl"
+#include "Utils.hlsl"
+
+obj_data raymarch(float3 ro, float3 rd, out float3 pos) {
+    pos = float3(0.0, 0.0, 0.0);
+    float t = 0.0;
+    
+    for (int i = 0; i < 500; i++) {
+        float3 p = ro + rd * t; // Sphere tracing
+        obj_data d = map(p, true);
+        
+        if (d.sdf < 0.0005) {
+            pos = p;
+            d.sdf = t;
+            return d;
+        }
+        
+        t += d.sdf;
+        
+        if (t > 50) {
+            break;
+        }
+    }
+    
+    obj_data empty = make_empty_obj_data();
+    empty.sdf = -1;
+    return empty;
+}
+
+float3 reflectedRadiance(float3 ro, float3 rd, inout uint sample_rng) {
+    int rr_depth = 5;
+    float surv_prob = 0.9;
+    
+    float3 rad = float3(0.0, 0.0, 0.0);
+    float3 throughput = float3(1.0, 1.0, 1.0);
+    bool flag = true;
+    
+    for (int bounce = 0; bounce < _BOUNCES; bounce++) {
+        float3 pos;
+        obj_data hit = raymarch(ro, rd, pos);
+        
+        if (hit.sdf < 0.0) {
+            rad += throughput * float3(0.1, 0.1, 0.1); // bg color
+            break;
+        }
+        
+        float3 normal = estimateNormal(pos);
+        
+        if (length(hit.emission) > 0.0) {
+            if (flag) {
+                rad += throughput * hit.emission; //prevents double counting from NEE
+            }
+            break;
+        }
+        
+        float p = (bounce >= rr_depth) ? surv_prob : 1.0;
+        if (frand(sample_rng) > p)
+            break;
+        
+        
+        float specular_chance = hit.p_spec;
+        if (specular_chance > 0.0) {
+            specular_chance = FresnelReflectAmount(1.0, hit.IOR, rd, normal, hit.p_spec, 1.0);
+        }
+
+        float do_specular = (frand(sample_rng) < specular_chance) ? 1.0 : 0.0;
+
+        bool new_flag = true;
+        if (do_specular == 0.0) {
+            new_flag = false;
+            float dpdf;
+            float3 light_pos = sampleLight(light, dpdf, sample_rng);
+            float3 light_normal = normalize(light_pos - light.pos);
+            float3 light_dir = normalize(light_pos - pos);
+
+            if (isVisible(pos, light_pos, sample_rng)) {
+                float dist2 = max(dot(light_pos - pos, light_pos - pos), 0.0001);
+                float cosx = max(0.0, dot(normal, light_dir));
+                float cosy = max(0.0, dot(light_normal, -light_dir));
+                float3 brdfVal = eval_diffuse_BRDF(hit, normal, -rd, light_dir);
+                rad += throughput * light.emission * brdfVal * cosx * cosy / (dpdf * dist2);
+            }
+        }
+
+        float pdf = 0.0;
+        float3 w_i = float3(0.0, 0.0, 0.0);
+
+        if (do_specular == 1.0) {
+            w_i = reflect(rd, normal);
+            w_i = normalize(lerp(w_i, uniform_random_PSA(normal, sample_rng), hit.roughness * hit.roughness));
+            pdf = 1.0;
+    
+            float cosTheta = max(0.0, dot(normal, w_i));
+            throughput *= hit.spec_col / max(p, 0.001);
+        } else {
+            sample_diffuse_BRDF(normal, -rd, w_i, pdf, sample_rng);
+            float cosTheta = max(0.0, dot(normal, w_i));
+            throughput *= eval_diffuse_BRDF(hit, normal, -rd, w_i) * cosTheta / max(p * pdf, 0.0001);
+        }
+
+        ro = pos + normal * 0.001;
+        rd = w_i;
+        flag = new_flag;
+    }
+    
+    return rad;
+}
+
+float3 calcColor(uint3 id, inout uint rng_state) {
+    float3 totalCol = float3(0.0, 0.0, 0.0);
+    
+    for (int sample = 0; sample < _SAMPLES; sample++) {
+        
+        // setup coords / rd & ro
+        uint sample_rng = rng_state ^ (sample * 0x9E3779B9u);
+
+        float2 jitter = float2(frand(sample_rng), frand(sample_rng));
+        float2 uv = (id.xy + jitter) / float2(_Width, _Height);
+        float2 d = uv * 2.0 - 1.0;
+
+        float4 target = mul(_CameraInverseProjection, float4(d, 0, 1));
+        target /= target.w;
+
+        float3 rd = normalize(mul(_CameraToWorld, float4(target.xyz, 0)).xyz);
+        float3 ro = _CameraToWorld._m03_m13_m23;
+        
+        float3 pos;
+        obj_data hit = raymarch(ro, rd, pos);
+
+        if (hit.sdf < 0.0) {
+            totalCol += float3(0.1, 0.1, 0.1); // bg color
+            continue;
+        }
+        
+        float3 sample_col = hit.emission + reflectedRadiance(ro, rd, sample_rng);
+        totalCol += min(sample_col, float3(10.0, 10.0, 10.0));// prevents fireflies
+    }
+    
+    return totalCol / float(_SAMPLES);
+}
+
+[numthreads(8, 8, 1)]
+void CSRewrite(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= _Width || id.y >= _Height)
+        return;
+
+    uint pixel_index = id.y * _Width + id.x;
+    uint rng_state = pixel_index ^ (_FrameIndex * 9781u);
+
+    float3 col = calcColor(id, rng_state);
+    
+    // ACCUMULATION
+    if (_useAccumulation == 1 && _CurrentSample > 0) {
+        float3 prev = _PreviousFrame.Load(int3(id.xy, 0)).rgb;
+        float blend = 1.0 / (_CurrentSample + 1.0);
+        if (_sceneMoving == 1)
+            blend = 1.0; // reset accumulation
+        col = lerp(prev, col, blend);
+    }
+    
+    Result[id.xy] = float4(col, 1.0);
+}

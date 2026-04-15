@@ -21,6 +21,18 @@ struct RTrayinfo {
     int didHit;
 };
 
+struct lightinfo {
+    float3 pos;
+    float rad;
+};
+
+lightinfo makeEmptyLightInfo() {
+    lightinfo info;
+    info.pos = float3(0.0, 0.0, 0.0);
+    info.rad = 0.0;
+    return info;
+}
+
 RTrayinfo makeEmptyRTrayinfo() {
     RTrayinfo info;
     info.dist = 0.0;
@@ -39,6 +51,7 @@ struct ObjData {
     float IOR;
     int isRT;
     RTrayinfo RTinfo;
+    lightinfo Linfo;
 };
 
 ObjData makeEmptyObjData() {
@@ -52,6 +65,8 @@ ObjData makeEmptyObjData() {
     obj.IOR = 1.0;
     obj.isRT = 0;
     obj.RTinfo = makeEmptyRTrayinfo();
+    obj.Linfo = makeEmptyLightInfo();
     return obj;
 }
+
 #endif

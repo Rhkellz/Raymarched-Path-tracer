@@ -53,13 +53,17 @@ float3 eval_diffuse_BRDF(obj_data hit, float3 n, float3 o, float3 i) {
     return hit.color / PI;
 }
 
-void sample_diffuse_BRDF(float3 n, float3 o, inout float3 i, inout float pdf, inout uint rng_state) {
+void sample_diffuse_BRDF(float3 n, float3 o, inout float3 i, inout float pdf, inout uint rng_state) {// make new random dir and give pdf
     i = uniform_random_PSA(n, rng_state);
     float cosTheta_i = dot(i, n);
     pdf = max(cosTheta_i / PI, 0.0001);
 }
 
-float3 sampleLight(light_data light, inout float pdf, inout uint sampleRng) {
+float diffuse_BRDF(float3 n, float3 w_i) {// pdf of a given dir
+    return max(dot(n, w_i), 0.0) / PI;
+}
+
+float3 sampleLight(light_data light, inout float pdf, inout uint sampleRng) {// pdf is area measure
     float xi_1 = frand(sampleRng);
     float xi_2 = frand(sampleRng);
     
@@ -91,5 +95,14 @@ float FresnelReflectAmount(float n1, float n2, float3 normal, float3 incident, f
  
                 // adjust reflect multiplier for object reflectivity
     return lerp(f0, f90, ret);
+}
+
+float2 random_point_on_circle(inout uint sample_rng) {
+    float a = frand(sample_rng);
+    float b = frand(sample_rng);
+    
+    a = sqrt(a);
+    b = 2 * PI * b;
+    return float2(a * cos(b), a * sin(b));
 }
 #endif

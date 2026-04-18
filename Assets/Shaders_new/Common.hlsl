@@ -16,12 +16,27 @@ uint _Height;
 uint _SAMPLES;
 uint _BOUNCES;
 uint _sceneMoving;
-uint _Param;
+float _Focal_len;
 uint _useAccumulation;
 float _CurrentSample;
 float3 _Sphere1;
 float3 _Sphere2;
 float _Smoothing;
+float _Defocus;
+float _AA_jitter;
+
+float3 _bg_col;
+
+float3 _color_1;
+float3 _orbit_1;
+
+float3 _color_2;
+float3 _orbit_2;
+
+float3 _color_3;
+float3 _orbit_3;
+
+float _orbit_sharp;
 
 struct obj_data {
     float sdf;

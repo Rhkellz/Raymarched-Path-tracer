@@ -6,68 +6,39 @@
 #include "Utils.hlsl"
 
 obj_data map(float3 p, bool keep_light) {
-    int sdf_cnt = 8;
-    obj_data sdfs_arr[8];
+    int sdf_cnt = 3;
+    obj_data sdfs_arr[3];
+    float3 fract_col = float3(1.0, 1.0, 1.0);
     
-    // --- Cornell Box Walls ---
-    obj_data floor_obj = make_empty_obj_data();
-    floor_obj.sdf = sdfBox(p, float3(0.0, -0.5, 0.0), float3(1.0, 0.01, 1.0));
-    floor_obj.color = float3(0.8, 0.8, 0.8);
-    floor_obj.spec_col = float3(0.8, 0.8, 0.8);
-    
-    obj_data ceiling_obj = make_empty_obj_data();
-    ceiling_obj.sdf = sdfBox(p, float3(0.0, 1.5, 0.0), float3(1.0, 0.01, 1.0));
-    ceiling_obj.color = float3(0.8, 0.8, 0.8);
-    ceiling_obj.spec_col = float3(0.8, 0.8, 0.8);
-    
-    obj_data back_wall = make_empty_obj_data();
-    back_wall.sdf = sdfBox(p, float3(0.0, 0.5, -1.0), float3(1.0, 1.0, 0.01));
-    back_wall.color = float3(0.8, 0.8, 0.8);
-    back_wall.spec_col = float3(0.8, 0.8, 0.8);
-    
-    obj_data left_wall = make_empty_obj_data();
-    left_wall.sdf = sdfBox(p, float3(-1.0, 0.5, 0.0), float3(0.01, 1.0, 1.0));
-    left_wall.color = float3(0.8, 0.2, 0.2); // red
-    left_wall.spec_col = float3(0.8, 0.2, 0.2);
-    
-    obj_data right_wall = make_empty_obj_data();
-    right_wall.sdf = sdfBox(p, float3(1.0, 0.5, 0.0), float3(0.01, 1.0, 1.0));
-    right_wall.color = float3(0.2, 0.8, 0.2); // green
-    right_wall.spec_col = float3(0.2, 0.8, 0.2);
-
     // --- Objects ---
     obj_data sphere_1 = make_empty_obj_data();
-    sphere_1.sdf = sdfSphere(p, _Sphere1, 0.3);
-    sphere_1.color = float3(1.0, 0.0, 0.0);
-    sphere_1.p_spec = 0.5;
-    sphere_1.spec_col = float3(1.0, 0.0, 0.0);
-    sphere_1.roughness = 0.0;
-    sphere_1.IOR = 1.5;
+    sphere_1.sdf = de(p, fract_col); //sdfSphere(p, _Sphere1, 0.3);
+    sphere_1.color = fract_col;
+    sphere_1.p_spec = 0.67;
+    sphere_1.spec_col = float3(0.5, 0.5, 0.5);
+    sphere_1.roughness = 0.4;
+    sphere_1.IOR = 8.0;
     
-    obj_data sphere_2 = make_empty_obj_data();
-    sphere_2.sdf = sdfSphere(p, _Sphere2, 0.3);
-    sphere_2.color = float3(0.0, 0.0, 1.0);
-    sphere_2.p_spec = 1.0;
-    sphere_2.spec_col = float3(0.0, 0.0, 1.0);
-    sphere_2.roughness = 0.5;
-    sphere_2.IOR = 1.5;
+    obj_data torus = make_empty_obj_data();
+    torus.sdf = sdfTorus(p, float2(0.018, 0.007), _Sphere2, 100);
+    torus.color = float3(1.0, 0.5, 0.0);
+    torus.p_spec = 1.0;
+    torus.spec_col = float3(1.0, 1.0, 1.0);
+    torus.roughness = 0.0;
+    torus.IOR = 1.0;
     
     obj_data light_sphere = make_empty_obj_data();
-    light_sphere.sdf = sdfSphere(p, float3(0.0, 1.3, 0.0), 0.2);
-    light_sphere.emission = float3(5.0, 5.0, 5.0);
+    light_sphere.sdf = sdfSphere(p, _Sphere1, 0.06);
+    light_sphere.emission = float3(4.0, 4.0, 4.0);
     
     light.emission = light_sphere.emission;
-    light.pos = float3(0.0, 1.3, 0.0);
-    light.rad = 0.2;
+    light.pos = _Sphere1;
+    light.rad = 0.06;
     
-    sdfs_arr[0] = floor_obj;
-    sdfs_arr[1] = ceiling_obj;
-    sdfs_arr[2] = back_wall;
-    sdfs_arr[3] = left_wall;
-    sdfs_arr[4] = right_wall;
-    sdfs_arr[5] = sphere_1;
-    sdfs_arr[6] = sphere_2;
-    sdfs_arr[7] = light_sphere;
+    sdfs_arr[0] = sphere_1;
+    sdfs_arr[1] = torus;
+    sdfs_arr[2] = light_sphere;
+
     
     obj_data result = sdfs_arr[0];
     
@@ -112,7 +83,7 @@ bool isVisible(float3 pos, float3 dest, inout uint sample_rng) {
     float dist = length(dest - pos);
     float t = 0.0;
     
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < 100; i++) {
         if (t >= dist)
             return true;
         

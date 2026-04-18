@@ -9,11 +9,12 @@ obj_data raymarch(float3 ro, float3 rd, out float3 pos) {
     pos = float3(0.0, 0.0, 0.0);
     float t = 0.0;
     
-    for (int i = 0; i < 500; i++) {
+    for (int i = 0; i < 200; i++) {
         float3 p = ro + rd * t; // Sphere tracing
+        
         obj_data d = map(p, true);
         
-        if (d.sdf < 0.0005) {
+        if (d.sdf < 0.0002) {
             pos = p;
             d.sdf = t;
             return d;
@@ -21,7 +22,7 @@ obj_data raymarch(float3 ro, float3 rd, out float3 pos) {
         
         t += d.sdf;
         
-        if (t > 50) {
+        if (t > 20) {
             break;
         }
     }
@@ -31,7 +32,7 @@ obj_data raymarch(float3 ro, float3 rd, out float3 pos) {
     return empty;
 }
 
-float3 reflectedRadiance(float3 ro, float3 rd, inout uint sample_rng) {
+float3 reflectedRadiance(obj_data init_hit, float3 init_pos, float3 ro, float3 rd, inout uint sample_rng) {
     int rr_depth = 5;
     float surv_prob = 0.9;
     
@@ -41,10 +42,16 @@ float3 reflectedRadiance(float3 ro, float3 rd, inout uint sample_rng) {
     
     for (int bounce = 0; bounce < _BOUNCES; bounce++) {
         float3 pos;
-        obj_data hit = raymarch(ro, rd, pos);
+        obj_data hit;
+        if (bounce == 0) {
+            hit = init_hit;
+            pos = init_pos;
+        } else {
+            hit = raymarch(ro, rd, pos);
+        }
         
         if (hit.sdf < 0.0) {
-            rad += throughput * float3(0.1, 0.1, 0.1); // bg color
+            rad += throughput * _bg_col;
             break;
         }
         
@@ -57,10 +64,7 @@ float3 reflectedRadiance(float3 ro, float3 rd, inout uint sample_rng) {
             break;
         }
         
-        float p = (bounce >= rr_depth) ? surv_prob : 1.0;
-        if (frand(sample_rng) > p)
-            break;
-        
+        float3 throughput_before = throughput;
         
         float specular_chance = hit.p_spec;
         if (specular_chance > 0.0) {
@@ -68,75 +72,131 @@ float3 reflectedRadiance(float3 ro, float3 rd, inout uint sample_rng) {
         }
 
         float do_specular = (frand(sample_rng) < specular_chance) ? 1.0 : 0.0;
-
-        bool new_flag = true;
+        
+        float light_pdf = 0;
         if (do_specular == 0.0) {
-            new_flag = false;
-            float dpdf;
-            float3 light_pos = sampleLight(light, dpdf, sample_rng);
+            float3 light_pos = sampleLight(light, light_pdf, sample_rng);
             float3 light_normal = normalize(light_pos - light.pos);
             float3 light_dir = normalize(light_pos - pos);
+            
+            float cosx = max(0.0, dot(normal, light_dir));
+     
 
-            if (isVisible(pos, light_pos, sample_rng)) {
-                float dist2 = max(dot(light_pos - pos, light_pos - pos), 0.0001);
-                float cosx = max(0.0, dot(normal, light_dir));
-                float cosy = max(0.0, dot(light_normal, -light_dir));
-                float3 brdfVal = eval_diffuse_BRDF(hit, normal, -rd, light_dir);
-                rad += throughput * light.emission * brdfVal * cosx * cosy / (dpdf * dist2);
+            if (cosx > 0.0 && light_pdf > 0.0) {
+                if (isVisible(pos, light_pos, sample_rng)) {
+                    // Change of measure on light_pdf (area to solid angle)
+                    float dist2 = max(dot(light_pos - pos, light_pos - pos), 0.0001);
+                    float cosy = max(1e-4, dot(light_normal, -light_dir));
+                    
+                    float SA_light_pdf = light_pdf * dist2 / cosy;
+                    
+                    float brdf_pdf = diffuse_BRDF(normal, light_dir);
+                    
+                    // power heuristic weight
+                    float w_e = (SA_light_pdf * SA_light_pdf) / ((SA_light_pdf * SA_light_pdf) + (brdf_pdf * brdf_pdf));
+                    
+                    float3 brdf = eval_diffuse_BRDF(hit, normal, -rd, light_dir);
+                    
+                    rad += light.emission * throughput * brdf * cosx * w_e / (max(1e-4, SA_light_pdf));
+                }
             }
         }
-
+        
         float pdf = 0.0;
         float3 w_i = float3(0.0, 0.0, 0.0);
-
-        if (do_specular == 1.0) {
-            w_i = reflect(rd, normal);
-            w_i = normalize(lerp(w_i, uniform_random_PSA(normal, sample_rng), hit.roughness * hit.roughness));
-            pdf = 1.0;
-    
-            float cosTheta = max(0.0, dot(normal, w_i));
-            throughput *= hit.spec_col / max(p, 0.001);
-        } else {
-            sample_diffuse_BRDF(normal, -rd, w_i, pdf, sample_rng);
-            float cosTheta = max(0.0, dot(normal, w_i));
-            throughput *= eval_diffuse_BRDF(hit, normal, -rd, w_i) * cosTheta / max(p * pdf, 0.0001);
+        float cos_theta = 0.0;
+        
+        float p = 1.0;
+        if (bounce >= rr_depth) {// Russian roulette
+            p = max(throughput.x, max(throughput.y, throughput.z));
+            p = clamp(p, 0.05, 0.95);
+            if (frand(sample_rng) > p) { break; }
         }
 
-        ro = pos + normal * 0.001;
+        if (do_specular == 1.0) {
+            float3 refl = reflect(rd, normal);
+            w_i = normalize(lerp(refl, uniform_random_PSA(normal, sample_rng), hit.roughness * hit.roughness));
+            pdf = 1.0;
+            cos_theta = max(dot(normal, w_i), 0.0);
+
+            throughput *= hit.spec_col / max(p, 1e-4);
+        } else {
+            sample_diffuse_BRDF(normal, -rd, w_i, pdf, sample_rng);
+            cos_theta = max(0.0, dot(normal, w_i));
+            //pdf *= 1.0 - specular_chance;
+            throughput *= eval_diffuse_BRDF(hit, normal, -rd, w_i) * cos_theta / max(pdf * p, 0.0001);
+        }
+        
+        float3 new_pos;
+        obj_data new_hit = raymarch(pos, w_i, new_pos);
+        
+        if (length(new_hit.emission) > 0.0) {
+            float3 new_light_norm = normalize(new_pos - light.pos);
+            
+            // Recompute the light_pdf change of measure (reuse area measure pdf if its already set in NEE)
+            if (light_pdf == 0) {
+                light_pdf = 1.0 / (4.0 * PI * light.rad * light.rad);
+            }
+
+            float dist2 = max(dot(new_pos - pos, new_pos - pos), 0.0001);
+            float cosy = max(1e-4, dot(new_light_norm, -w_i));
+            
+            float SA_light_pdf = light_pdf * dist2 / cosy;
+            
+            // power heuristic weight
+            float w_r = pdf * pdf / ((pdf * pdf) + (SA_light_pdf * SA_light_pdf));
+            
+            rad += throughput_before * light.emission * w_r;
+            break;
+        }
+        
+        ro = pos + w_i * 0.001;
         rd = w_i;
-        flag = new_flag;
+        flag = (do_specular == 1.0) ? true : false;
     }
     
     return rad;
 }
+
 
 float3 calcColor(uint3 id, inout uint rng_state) {
     float3 totalCol = float3(0.0, 0.0, 0.0);
     
     for (int sample = 0; sample < _SAMPLES; sample++) {
         
-        // setup coords / rd & ro
+        // setup
         uint sample_rng = rng_state ^ (sample * 0x9E3779B9u);
-
-        float2 jitter = float2(frand(sample_rng), frand(sample_rng));
-        float2 uv = (id.xy + jitter) / float2(_Width, _Height);
+        
+        float2 uv = id.xy / float2(_Width, _Height);
         float2 d = uv * 2.0 - 1.0;
 
         float4 target = mul(_CameraInverseProjection, float4(d, 0, 1));
         target /= target.w;
+        
 
-        float3 rd = normalize(mul(_CameraToWorld, float4(target.xyz, 0)).xyz);
-        float3 ro = _CameraToWorld._m03_m13_m23;
+        float2 defocus_rand = random_point_on_circle(sample_rng) * _Defocus / _Width;
+        float2 jitter_rand = random_point_on_circle(sample_rng) * _AA_jitter / _Width;
+        
+        float3 cam_right = _CameraToWorld._m00_m10_m20; 
+        float3 cam_up = _CameraToWorld._m01_m11_m21;
+        
+        float3 rd_center = normalize(mul(_CameraToWorld, float4(target.xyz, 0)).xyz);
+        float3 ro_center = _CameraToWorld._m03_m13_m23;
+        
+        float3 focal_point = ro_center + rd_center * _Focal_len;
+        
+        float3 ro = ro_center + cam_right * defocus_rand.x + cam_up * defocus_rand.y;
+        float3 rd = normalize(focal_point - ro + cam_right * jitter_rand.x + cam_up * jitter_rand.y);
         
         float3 pos;
         obj_data hit = raymarch(ro, rd, pos);
 
         if (hit.sdf < 0.0) {
-            totalCol += float3(0.1, 0.1, 0.1); // bg color
+            totalCol += _bg_col;
             continue;
         }
         
-        float3 sample_col = hit.emission + reflectedRadiance(ro, rd, sample_rng);
+        float3 sample_col = hit.emission + reflectedRadiance(hit, pos, ro, rd, sample_rng); //integrateFromHit(hit, pos, ro, rd, sample_rng);
         totalCol += min(sample_col, float3(10.0, 10.0, 10.0));// prevents fireflies
     }
     

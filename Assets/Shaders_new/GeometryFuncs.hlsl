@@ -14,6 +14,30 @@ float sdfBox(float3 p, float3 center, float3 size) {
     return min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, 0.0));
 }
 
+float3x3 rotateX(float angle) {
+    float s = sin(angle), c = cos(angle);
+    return float3x3(
+        1, 0, 0,
+        0, c, -s,
+        0, s, c
+    );
+}
+
+float3x3 rotateZ(float angle) {
+    float s = sin(angle), c = cos(angle);
+    return float3x3(
+        c, -s, 0,
+        s, c, 0,
+        0, 0, 1
+    );
+}
+
+float sdfTorus(float3 p, float2 t, float3 center, float angle) {
+    float3 localP = mul(rotateZ(-70), mul(rotateX(angle), p - center));
+    float2 q = float2(length(localP.xz) - t.x, localP.y);
+    return length(q) - t.y;
+}
+
 float2 smin(float a, float b, float k) {
     float h = 1.0 - min(abs(a - b) / (4.0 * k), 1.0);
     float w = h * h;
@@ -22,16 +46,114 @@ float2 smin(float a, float b, float k) {
     return (a < b) ? float2(a - s, m) : float2(b - s, 1.0 - m);
 }
 
-float F(float3 p0) {
-    float4 p = float4(p0.x, p0.y, p0.z, 1.0);
-    for (int i = 0; i < 10; i++) {
-        p.xyz = fmod(p.xyz - 1., 2.) - 1.;
-        p *= 1.7 / dot(p.xyz, p.xyz);
-    }
-    return length(p.xz / p.w) * 0.25;
-}
 
-float de(float3 p) {
+float de1(float3 p) {
     return length(.05 * cos(9. * p.y * p.x) + cos(p) - .1 * cos(9. * (p.z + .3 * p.x - p.y))) - 1.;
 }
+
+float de(float3 p, inout float3 fract_col) {
+    float s = 2., l = 0.;
+    p = abs(p);
+    
+    float sphere_trap = 1e10;
+    float sphere_trap1 = 1e10;
+    float sphere_trap2 = 1e10;
+    
+    for (int j = 0; j++ < 8;) {
+        p = 1. - abs(abs(p - 2.) - 1.),
+      p *= l = 1.2 / dot(p, p), s *= l;
+        
+        sphere_trap = min(sphere_trap, abs(length(p - _orbit_1) - 0.2));
+        sphere_trap1 = min(sphere_trap1, abs(length(p - _orbit_2) - 0.3));
+        sphere_trap2 = min(sphere_trap2, abs(length(p - _orbit_3) - 0.05));
+        
+    }
+    float k = 10.1;
+
+    float w0 = exp(-k * sphere_trap);
+    float w1 = exp(-k * sphere_trap1);
+    float w2 = exp(-k * sphere_trap2);
+    float wSum = w0 + w1 + w2 + 1e-6;
+
+    fract_col = (w0 * _color_1 + w1 * _color_2 + w2 * _color_3) / wSum;
+    
+    return dot(p, normalize(float3(3, -2, -1))) / s;
+}
+
+	
+
+float de3(float3 p0) {//menger-y
+    float4 p = float4(p0 / 10., 1.);
+    //escape = 0.;
+    p = abs(p);
+    if (p.x < p.z)
+        p.xz = p.zx;
+    if (p.z < p.y)
+        p.zy = p.yz;
+    if (p.y < p.x)
+        p.yx = p.xy;
+    for (int i = 0; i < 6; i++) {
+        if (p.x < p.z)
+            p.xz = p.zx;
+        if (p.z < p.y)
+            p.zy = p.yz;
+        if (p.y < p.x)
+            p.yx = p.xy;
+        p = abs(p);
+        p *= (2. / clamp(dot(p.xyz, p.xyz), 0.1, 1.));
+        p.xyz -= float3(0.9, 1.9, 0.9);
+    }
+    float m = 1.5;
+    p.xyz -= clamp(p.xyz, -m, m);
+    return (length(p.xyz) / p.w) * 10.;
+}
+
+	
+
+float de5(float3 p, inout float3 fract_col) {
+    fract_col = float3(0.0, 0.5, 0.5);
+    float3 q = p - floor(p) - .5;
+    float f = -length(p.xy) + 2., g = length(q) - .6;
+    return max(f, -g);
+}
+
+	
+
+float de4(float3 p, inout float3 fract_col) {
+    p.xz = abs(.5 - fmod(p.xz, 1.)) + .01;
+    float DEfactor = 1.0;
+    
+    float3 sphere_center = float3(0.5, -0.4, 0.79);
+    float sphere_trap = 1e10;
+    
+    float3 sphere_center1 = float3(0.5, -0.2, -0.70);
+    float sphere_trap1 = 1e10;
+    
+    float3 sphere_center2 = float3(0.2, -0.3, 0.70);
+    float sphere_trap2 = 1e10;
+    
+    for (int i = 0; i < 14; i++) {
+        p = abs(p) - float3(0., 2., 0.);
+        float r2 = dot(p, p);
+        float sc = 2. / clamp(r2, 0.4, 1.);
+        p *= sc;
+        DEfactor *= sc;
+        p = p - float3(0.5, 1., 0.5);
+        
+        sphere_trap = min(sphere_trap, abs(length(p - sphere_center) - 0.1));
+        sphere_trap1 = min(sphere_trap1, abs(length(p - sphere_center1) - 0.3));
+        sphere_trap2 = min(sphere_trap2, abs(length(p - sphere_center2) - 0.1));
+    }
+    
+    float3 col_2 = float3(0.929, 0.682, 0.286);
+    float3 col_1 = float3(0.82, 0.286, 0.357);
+    float3 col_3 = float3(0, 0.475, 0.549);
+    
+    float blend = clamp(((sphere_trap1 + sphere_trap - 2*sphere_trap2) / 3) * 5.0, 
+    0.0, 1.0);
+    fract_col = lerp(lerp(col_3, col_2, blend), col_1, blend);
+    
+    return length(p) / DEfactor - .0005;
+}
+
 #endif

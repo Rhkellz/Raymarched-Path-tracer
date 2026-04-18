@@ -30,8 +30,26 @@ public class PathTracingCompute : MonoBehaviour {
     public int maxBounces = 4;
     [Range(0f, 0.2f)]
     public float smoothing = 0.1f;
-    [Range(0, 1)]
-    public int testParam = 0;
+    [Range(0.01f, 1f)]
+    public float focal_length = 0.01f;
+    [Range(0.00f, 5f)]
+    public float Defocus = 1.0f;
+
+    [Range(0.00f, 5f)]
+    public float AA_jitter = 1.0f;
+
+    public Color BG_color = new Color(0.1f, 0.1f, 0.1f);
+    public Color color_1 = new Color(1.0f, 1.0f, 1.0f);
+    public Vector3 orbit_1 = new Vector3(0f, 0f, 0f);
+
+    public Color color_2 = new Color(1.0f, 1.0f, 1.0f);
+    public Vector3 orbit_2 = new Vector3(0.1f, 0.1f, 0.1f);
+
+    public Color color_3 = new Color(1.0f, 1.0f, 1.0f);
+    public Vector3 orbit_3 = new Vector3(-0.1f, -0.1f, -0.1f);
+
+    [Range(0.01f, 20f)]
+    public float orbit_sharpness = 8.0f;
 
     public bool useAccumulation = true;
 
@@ -114,7 +132,22 @@ public class PathTracingCompute : MonoBehaviour {
         pathTracingCS.SetInt("_BOUNCES", maxBounces);
         pathTracingCS.SetInt("_FrameIndex", frameIndex);
         pathTracingCS.SetFloat("_Smoothing", smoothing);
-        pathTracingCS.SetFloat("_Param", testParam);
+        pathTracingCS.SetFloat("_Focal_len", focal_length);
+        pathTracingCS.SetFloat("_Defocus", Defocus);
+
+        pathTracingCS.SetVector("_color_1", color_1);
+        pathTracingCS.SetVector("_orbit_1", orbit_1);
+
+        pathTracingCS.SetVector("_color_2", color_2);
+        pathTracingCS.SetVector("_orbit_2", orbit_2);
+
+        pathTracingCS.SetVector("_color_3", color_3);
+        pathTracingCS.SetVector("_orbit_3", orbit_3);
+
+        pathTracingCS.SetVector("_bg_col", BG_color);
+
+        pathTracingCS.SetFloat("_orbit_sharp", orbit_sharpness);
+        pathTracingCS.SetFloat("_AA_jitter", AA_jitter);
 
         pathTracingCS.SetInt("_sceneMoving", sceneMoving);
         pathTracingCS.SetInt("_useAccumulation", 1);

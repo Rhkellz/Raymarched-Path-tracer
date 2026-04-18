@@ -272,24 +272,24 @@ MonoBehaviour:
   pathTracingCS: {fileID: 7200000, guid: f8c1722c347c5484f88a911b00b7bd05, type: 3}
   sphere1: {fileID: 925056668}
   sphere2: {fileID: 786443646}
-  samplesPerPixel: 1
-  maxBounces: 2
+  samplesPerPixel: 2
+  maxBounces: 6
   smoothing: 0.0015
-  focal_length: 1
-  Defocus: 0
+  focal_length: 0.9
+  Defocus: 0.51
   AA_jitter: 1
-  BG_color: {r: 0.8301887, g: 0.19188325, b: 0.19188325, a: 1}
-  color_1: {r: 0.764151, g: 0.12438657, b: 0.111739054, a: 1}
-  orbit_1: {x: 0, y: 0, z: 0}
-  radius_1: 0.3
-  color_2: {r: 0.9622642, g: 0.16794233, b: 0.16794233, a: 1}
-  orbit_2: {x: 0.1, y: 0.1, z: 0.1}
-  radius_2: 0.3
-  color_3: {r: 0.8679245, g: 0.118725546, b: 0.118725546, a: 1}
-  orbit_3: {x: -0.1, y: -0.1, z: -0.1}
-  radius_3: 0.3
-  orbit_sharpness: 8
-  useAccumulation: 1
+  BG_color: {r: 1, g: 0.7877358, b: 0.7877358, a: 1}
+  color_1: {r: 1, g: 0, b: 0.32941177, a: 1}
+  orbit_1: {x: 0.69, y: 0.09, z: 2.15}
+  radius_1: 1.01
+  color_2: {r: 0.22352941, g: 0, b: 0.6, a: 1}
+  orbit_2: {x: 0.74, y: 0.91, z: 0.57}
+  radius_2: 1.94
+  color_3: {r: 1, g: 0.7411765, b: 0, a: 1}
+  orbit_3: {x: -0.1, y: 1.16, z: 1.77}
+  radius_3: 1.15
+  orbit_sharpness: 17
+  useAccumulation: 0
 --- !u!1 &786443642
 GameObject:
   m_ObjectHideFlags: 0
@@ -373,7 +373,7 @@ Transform:
   m_GameObject: {fileID: 786443642}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.55, y: -0.4705, z: 100}
+  m_LocalPosition: {x: 100, y: -0.4705, z: 0.7422}
   m_LocalScale: {x: 0.01, y: 0.01, z: 0.01}
   m_ConstrainProportionsScale: 0
   m_Children: []

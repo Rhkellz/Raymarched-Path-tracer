@@ -14,10 +14,10 @@ obj_data map(float3 p, bool keep_light) {
     obj_data sphere_1 = make_empty_obj_data();
     sphere_1.sdf = de(p, fract_col); //sdfSphere(p, _Sphere1, 0.3);
     sphere_1.color = fract_col;
-    sphere_1.p_spec = 0.67;
-    sphere_1.spec_col = float3(0.5, 0.5, 0.5);
-    sphere_1.roughness = 0.4;
-    sphere_1.IOR = 8.0;
+    sphere_1.p_spec = 0.5;
+    sphere_1.spec_col = fract_col; //float3(1.0, 1.0, 1.0);
+    sphere_1.roughness = 0.3;
+    sphere_1.IOR = 1.0;
     
     obj_data torus = make_empty_obj_data();
     torus.sdf = sdfTorus(p, float2(0.018, 0.007), _Sphere2, 100);
@@ -28,12 +28,12 @@ obj_data map(float3 p, bool keep_light) {
     torus.IOR = 1.0;
     
     obj_data light_sphere = make_empty_obj_data();
-    light_sphere.sdf = sdfSphere(p, _Sphere1, 0.06);
+    light_sphere.sdf = sdfSphere(p, _Sphere1, 0.5);
     light_sphere.emission = float3(4.0, 4.0, 4.0);
     
     light.emission = light_sphere.emission;
     light.pos = _Sphere1;
-    light.rad = 0.06;
+    light.rad = 0.5;
     
     sdfs_arr[0] = sphere_1;
     sdfs_arr[1] = torus;

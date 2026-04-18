@@ -29,12 +29,15 @@ float3 _bg_col;
 
 float3 _color_1;
 float3 _orbit_1;
+float _rad_1;
 
 float3 _color_2;
 float3 _orbit_2;
+float _rad_2;
 
 float3 _color_3;
 float3 _orbit_3;
+float _rad_3;
 
 float _orbit_sharp;
 

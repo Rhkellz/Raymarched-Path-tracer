@@ -51,7 +51,7 @@ float de1(float3 p) {
     return length(.05 * cos(9. * p.y * p.x) + cos(p) - .1 * cos(9. * (p.z + .3 * p.x - p.y))) - 1.;
 }
 
-float de(float3 p, inout float3 fract_col) {
+float de3(float3 p, inout float3 fract_col) {
     float s = 2., l = 0.;
     p = abs(p);
     
@@ -63,16 +63,15 @@ float de(float3 p, inout float3 fract_col) {
         p = 1. - abs(abs(p - 2.) - 1.),
       p *= l = 1.2 / dot(p, p), s *= l;
         
-        sphere_trap = min(sphere_trap, abs(length(p - _orbit_1) - 0.2));
-        sphere_trap1 = min(sphere_trap1, abs(length(p - _orbit_2) - 0.3));
-        sphere_trap2 = min(sphere_trap2, abs(length(p - _orbit_3) - 0.05));
+        sphere_trap = min(sphere_trap, abs(length(p - _orbit_1) - _rad_1));
+        sphere_trap1 = min(sphere_trap1, abs(length(p - _orbit_2) - _rad_2));
+        sphere_trap2 = min(sphere_trap2, abs(length(p - _orbit_3) - _rad_3));
         
     }
-    float k = 10.1;
 
-    float w0 = exp(-k * sphere_trap);
-    float w1 = exp(-k * sphere_trap1);
-    float w2 = exp(-k * sphere_trap2);
+    float w0 = exp(-_orbit_sharp * sphere_trap);
+    float w1 = exp(-_orbit_sharp * sphere_trap1);
+    float w2 = exp(-_orbit_sharp * sphere_trap2);
     float wSum = w0 + w1 + w2 + 1e-6;
 
     fract_col = (w0 * _color_1 + w1 * _color_2 + w2 * _color_3) / wSum;
@@ -82,8 +81,12 @@ float de(float3 p, inout float3 fract_col) {
 
 	
 
-float de3(float3 p0) {//menger-y
+float de(float3 p0, inout float3 fract_col) {//menger-y
     float4 p = float4(p0 / 10., 1.);
+    float sphere_trap = 1e10;
+    float sphere_trap1 = 1e10;
+    float sphere_trap2 = 1e10;
+
     //escape = 0.;
     p = abs(p);
     if (p.x < p.z)
@@ -102,34 +105,30 @@ float de3(float3 p0) {//menger-y
         p = abs(p);
         p *= (2. / clamp(dot(p.xyz, p.xyz), 0.1, 1.));
         p.xyz -= float3(0.9, 1.9, 0.9);
+        
+        sphere_trap = min(sphere_trap, abs(length(p - _orbit_1) - _rad_1));
+        sphere_trap1 = min(sphere_trap1, abs(length(p - _orbit_2) - _rad_2));
+        sphere_trap2 = min(sphere_trap2, abs(length(p - _orbit_3) - _rad_3));
     }
     float m = 1.5;
     p.xyz -= clamp(p.xyz, -m, m);
+    
+    float w0 = exp(-_orbit_sharp * sphere_trap);
+    float w1 = exp(-_orbit_sharp * sphere_trap1);
+    float w2 = exp(-_orbit_sharp * sphere_trap2);
+    float wSum = w0 + w1 + w2 + 1e-6;
+
+    fract_col = (w0 * _color_1 + w1 * _color_2 + w2 * _color_3) / wSum;
+    
     return (length(p.xyz) / p.w) * 10.;
 }
-
-	
-
-float de5(float3 p, inout float3 fract_col) {
-    fract_col = float3(0.0, 0.5, 0.5);
-    float3 q = p - floor(p) - .5;
-    float f = -length(p.xy) + 2., g = length(q) - .6;
-    return max(f, -g);
-}
-
-	
 
 float de4(float3 p, inout float3 fract_col) {
     p.xz = abs(.5 - fmod(p.xz, 1.)) + .01;
     float DEfactor = 1.0;
     
-    float3 sphere_center = float3(0.5, -0.4, 0.79);
     float sphere_trap = 1e10;
-    
-    float3 sphere_center1 = float3(0.5, -0.2, -0.70);
     float sphere_trap1 = 1e10;
-    
-    float3 sphere_center2 = float3(0.2, -0.3, 0.70);
     float sphere_trap2 = 1e10;
     
     for (int i = 0; i < 14; i++) {
@@ -140,18 +139,17 @@ float de4(float3 p, inout float3 fract_col) {
         DEfactor *= sc;
         p = p - float3(0.5, 1., 0.5);
         
-        sphere_trap = min(sphere_trap, abs(length(p - sphere_center) - 0.1));
-        sphere_trap1 = min(sphere_trap1, abs(length(p - sphere_center1) - 0.3));
-        sphere_trap2 = min(sphere_trap2, abs(length(p - sphere_center2) - 0.1));
+        sphere_trap = min(sphere_trap, abs(length(p - _orbit_1) - _rad_1));
+        sphere_trap1 = min(sphere_trap1, abs(length(p - _orbit_2) - _rad_2));
+        sphere_trap2 = min(sphere_trap2, abs(length(p - _orbit_3) - _rad_3));
     }
     
-    float3 col_2 = float3(0.929, 0.682, 0.286);
-    float3 col_1 = float3(0.82, 0.286, 0.357);
-    float3 col_3 = float3(0, 0.475, 0.549);
-    
-    float blend = clamp(((sphere_trap1 + sphere_trap - 2*sphere_trap2) / 3) * 5.0, 
-    0.0, 1.0);
-    fract_col = lerp(lerp(col_3, col_2, blend), col_1, blend);
+    float w0 = exp(-_orbit_sharp * sphere_trap);
+    float w1 = exp(-_orbit_sharp * sphere_trap1);
+    float w2 = exp(-_orbit_sharp * sphere_trap2);
+    float wSum = w0 + w1 + w2 + 1e-6;
+
+    fract_col = (w0 * _color_1 + w1 * _color_2 + w2 * _color_3) / wSum;
     
     return length(p) / DEfactor - .0005;
 }

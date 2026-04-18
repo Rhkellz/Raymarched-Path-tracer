@@ -183,10 +183,12 @@ float3 calcColor(uint3 id, inout uint rng_state) {
         float3 rd_center = normalize(mul(_CameraToWorld, float4(target.xyz, 0)).xyz);
         float3 ro_center = _CameraToWorld._m03_m13_m23;
         
-        float3 focal_point = ro_center + rd_center * _Focal_len;
+        float3 focal_point = ro_center + rd_center * _Focal_len
+                   + cam_right * jitter_rand.x
+                   + cam_up * jitter_rand.y;
         
         float3 ro = ro_center + cam_right * defocus_rand.x + cam_up * defocus_rand.y;
-        float3 rd = normalize(focal_point - ro + cam_right * jitter_rand.x + cam_up * jitter_rand.y);
+        float3 rd = normalize(focal_point - ro);
         
         float3 pos;
         obj_data hit = raymarch(ro, rd, pos);

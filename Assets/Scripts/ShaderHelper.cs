@@ -39,14 +39,18 @@ public class PathTracingCompute : MonoBehaviour {
     public float AA_jitter = 1.0f;
 
     public Color BG_color = new Color(0.1f, 0.1f, 0.1f);
+
     public Color color_1 = new Color(1.0f, 1.0f, 1.0f);
     public Vector3 orbit_1 = new Vector3(0f, 0f, 0f);
+    public float radius_1 = 0.3f;
 
     public Color color_2 = new Color(1.0f, 1.0f, 1.0f);
     public Vector3 orbit_2 = new Vector3(0.1f, 0.1f, 0.1f);
+    public float radius_2 = 0.3f;
 
     public Color color_3 = new Color(1.0f, 1.0f, 1.0f);
     public Vector3 orbit_3 = new Vector3(-0.1f, -0.1f, -0.1f);
+    public float radius_3 = 0.3f;
 
     [Range(0.01f, 20f)]
     public float orbit_sharpness = 8.0f;
@@ -137,12 +141,15 @@ public class PathTracingCompute : MonoBehaviour {
 
         pathTracingCS.SetVector("_color_1", color_1);
         pathTracingCS.SetVector("_orbit_1", orbit_1);
+        pathTracingCS.SetFloat("_rad_1", radius_1);
 
         pathTracingCS.SetVector("_color_2", color_2);
         pathTracingCS.SetVector("_orbit_2", orbit_2);
+        pathTracingCS.SetFloat("_rad_2", radius_2);
 
         pathTracingCS.SetVector("_color_3", color_3);
         pathTracingCS.SetVector("_orbit_3", orbit_3);
+        pathTracingCS.SetFloat("_rad_3", radius_3);
 
         pathTracingCS.SetVector("_bg_col", BG_color);
 

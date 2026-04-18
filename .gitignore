@@ -95,3 +95,18 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+UpgradeLog*.htm
+.vsconfig
+
+/Assets/_Recovery/
+
+# Unity Settings/Renderer assets
+Assets/Settings/
+
+# TutorialInfo
+Assets/TutorialInfo/
+Assets/TutorialInfo.meta
+
+Assets/InputSystem_Actions.inputactions
+Assets/InputSystem_Actions.inputactions.meta

@@ -28,12 +28,12 @@ obj_data map(float3 p, bool keep_light) {
     torus.IOR = 1.0;
     
     obj_data light_sphere = make_empty_obj_data();
-    light_sphere.sdf = sdfSphere(p, _Sphere1, 0.5);
+    light_sphere.sdf = sdfSphere(p, _Sphere1, 0.1);
     light_sphere.emission = float3(4.0, 4.0, 4.0);
     
     light.emission = light_sphere.emission;
     light.pos = _Sphere1;
-    light.rad = 0.5;
+    light.rad = 0.1;
     
     sdfs_arr[0] = sphere_1;
     sdfs_arr[1] = torus;
@@ -44,7 +44,7 @@ obj_data map(float3 p, bool keep_light) {
     
     for (int i = 1; i < sdf_cnt; i++) {
         
-        if (length(sdfs_arr[i].emission) > 0.0) {// should cleanup
+        if (length(sdfs_arr[i].emission) > 0.0) { // should cleanup
             if (!keep_light) {
                 continue;
             }
@@ -97,5 +97,40 @@ bool isVisible(float3 pos, float3 dest, inout uint sample_rng) {
 
     }
     return true;
+}
+
+float3 gradient(float3 p) {
+    float3 e_1 = float3(1.0, 0.0, 0.0);
+    float3 e_2 = float3(0.0, 1.0, 0.0);
+    float3 e_3 = float3(0.0, 0.0, 1.0);
+    
+    return (float3(map(p + e_1 * epsilon, true).sdf,
+                   map(p + e_2 * epsilon, true).sdf,
+                   map(p + e_3 * epsilon, true).sdf)
+          - float3(map(p - e_1 * epsilon, true).sdf,
+                   map(p - e_2 * epsilon, true).sdf,
+                   map(p - e_3 * epsilon, true).sdf)) / (2.0 * epsilon);
+}
+
+float local_lipschitz(float3 rd, segment seg, out obj_data d) {
+    float result = -1.0;
+    float3 p = seg.start;
+
+    d = map(p, true); // return this for reuse later
+    
+    for (int i = 0; i <= _samples_per_segment; i++) {
+        p = seg.start + (length(seg.end - seg.start) / float(_samples_per_segment)) * float(i) * rd;
+        
+        float coeff = abs(dot(gradient(p), rd));
+        /*if (i == 0) {
+            coeff = abs(dot(gradient(p, d.sdf, true), rd));
+        } else {
+            coeff = abs(dot(gradient(p, 0, false), rd));
+        }*/
+        
+        result = max(result, coeff);
+    }
+    
+    return clamp(result, 0.001, 1.0); // term is bounded above by 1.0
 }
 #endif

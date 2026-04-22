@@ -41,6 +41,11 @@ float _rad_3;
 
 float _orbit_sharp;
 
+int _samples_per_segment;
+int _use_segment;
+
+float epsilon = 0.0001;
+
 struct obj_data {
     float sdf;
     float3 color;
@@ -71,4 +76,8 @@ obj_data make_empty_obj_data() {
     return data;
 }
 
+struct segment {
+    float3 start;
+    float3 end;
+};
 #endif

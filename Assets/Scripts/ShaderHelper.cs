@@ -30,6 +30,9 @@ public class PathTracingCompute : MonoBehaviour {
     public int maxBounces = 4;
     [Range(0f, 0.2f)]
     public float smoothing = 0.1f;
+    public bool segment_trace = true;
+    [Range(1, 32)]
+    public int samples_per_segment = 3;
     [Range(0.01f, 1f)]
     public float focal_length = 0.01f;
     [Range(0.00f, 5f)]
@@ -127,7 +130,7 @@ public class PathTracingCompute : MonoBehaviour {
         pathTracingCS.SetInt("_Height", Screen.height);
 
         pathTracingCS.SetMatrix("_CameraToWorld", cam.cameraToWorldMatrix);
-        pathTracingCS.SetMatrix("_CameraInverseProjection", cam.projectionMatrix.inverse);
+       pathTracingCS.SetMatrix("_CameraInverseProjection", cam.projectionMatrix.inverse);
 
         pathTracingCS.SetVector("_Sphere1", sphere1.position);
         pathTracingCS.SetVector("_Sphere2", sphere2.position);
@@ -157,8 +160,15 @@ public class PathTracingCompute : MonoBehaviour {
         pathTracingCS.SetFloat("_AA_jitter", AA_jitter);
 
         pathTracingCS.SetInt("_sceneMoving", sceneMoving);
-        pathTracingCS.SetInt("_useAccumulation", 1);
         pathTracingCS.SetFloat("_CurrentSample", currentSample);
+
+        pathTracingCS.SetInt("_samples_per_segment", samples_per_segment);
+        if (segment_trace) {
+            pathTracingCS.SetInt("_use_segment", 1);
+        } else {
+            pathTracingCS.SetInt("_use_segment", 0);
+        }
+        
         if (useAccumulation) {
             pathTracingCS.SetInt("_useAccumulation", 1);
         } else {

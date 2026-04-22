@@ -81,7 +81,7 @@ float de3(float3 p, inout float3 fract_col) {
 
 	
 
-float de(float3 p0, inout float3 fract_col) {//menger-y
+float de4(float3 p0, inout float3 fract_col) {//menger-y
     float4 p = float4(p0 / 10., 1.);
     float sphere_trap = 1e10;
     float sphere_trap1 = 1e10;
@@ -123,7 +123,7 @@ float de(float3 p0, inout float3 fract_col) {//menger-y
     return (length(p.xyz) / p.w) * 10.;
 }
 
-float de4(float3 p, inout float3 fract_col) {
+float de(float3 p, inout float3 fract_col) {
     p.xz = abs(.5 - fmod(p.xz, 1.)) + .01;
     float DEfactor = 1.0;
     

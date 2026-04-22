@@ -5,12 +5,13 @@
 #include "GeometryFuncs.hlsl"
 #include "Utils.hlsl"
 
-obj_data raymarch(float3 ro, float3 rd, out float3 pos) {
+obj_data sphere_trace(float3 ro, float3 rd, out float3 pos, out float steps) {
     pos = float3(0.0, 0.0, 0.0);
     float t = 0.0;
     
     for (int i = 0; i < 200; i++) {
-        float3 p = ro + rd * t; // Sphere tracing
+        steps++;
+        float3 p = ro + rd * t;
         
         obj_data d = map(p, true);
         
@@ -20,11 +21,53 @@ obj_data raymarch(float3 ro, float3 rd, out float3 pos) {
             return d;
         }
         
-        t += d.sdf;
+        t += d.sdf; // Divide by global lipschitz, assume 1 for true sdfs (even tho fractals arent really)
         
-        if (t > 20) {
+        if (t > 20.0) {
             break;
         }
+    }
+    
+    obj_data empty = make_empty_obj_data();
+    empty.sdf = -1;
+    return empty;
+}
+
+obj_data segment_trace(float3 ro, float3 rd, out float3 pos, out float steps) {
+    float kappa = 2.0; // Usually want this at 2
+    float epsilon_i = 1.2; // temp
+    float t = 0.0;
+    float step_incr = 0.0;
+    float3 p = ro;
+    
+    for (int i = 0; i < 200; i++) {
+        steps++;
+        p = ro + t * rd;
+        
+        segment curr_seg; // current segment
+        curr_seg.start = p;
+        curr_seg.end = ro + (t + epsilon_i) * rd;
+        
+        obj_data d;
+        float lipschitz = local_lipschitz(rd, curr_seg, d);
+        
+        
+        if (d.sdf < epsilon) {
+            pos = p;
+            d.sdf = t;
+            return d;
+        }
+        
+        if (t > 20.0) {
+            break;
+        }
+        
+        step_incr = min(d.sdf / max(lipschitz, 0.01), epsilon_i);
+        step_incr = max(step_incr, epsilon);
+        
+        t += step_incr;
+        
+        epsilon_i = kappa * step_incr;
     }
     
     obj_data empty = make_empty_obj_data();
@@ -40,6 +83,9 @@ float3 reflectedRadiance(obj_data init_hit, float3 init_pos, float3 ro, float3 r
     float3 throughput = float3(1.0, 1.0, 1.0);
     bool flag = true;
     
+    obj_data new_hit = make_empty_obj_data();
+    float3 new_pos = float3(0.0, 0.0, 0.0);
+    
     for (int bounce = 0; bounce < _BOUNCES; bounce++) {
         float3 pos;
         obj_data hit;
@@ -47,7 +93,7 @@ float3 reflectedRadiance(obj_data init_hit, float3 init_pos, float3 ro, float3 r
             hit = init_hit;
             pos = init_pos;
         } else {
-            hit = raymarch(ro, rd, pos);
+            hit = new_hit;
         }
         
         if (hit.sdf < 0.0) {
@@ -107,10 +153,12 @@ float3 reflectedRadiance(obj_data init_hit, float3 init_pos, float3 ro, float3 r
         float cos_theta = 0.0;
         
         float p = 1.0;
-        if (bounce >= rr_depth) {// Russian roulette
+        if (bounce >= rr_depth) { // Russian roulette
             p = max(throughput.x, max(throughput.y, throughput.z));
             p = clamp(p, 0.05, 0.95);
-            if (frand(sample_rng) > p) { break; }
+            if (frand(sample_rng) > p) {
+                break;
+            }
         }
 
         if (do_specular == 1.0) {
@@ -126,9 +174,8 @@ float3 reflectedRadiance(obj_data init_hit, float3 init_pos, float3 ro, float3 r
             //pdf *= 1.0 - specular_chance;
             throughput *= eval_diffuse_BRDF(hit, normal, -rd, w_i) * cos_theta / max(pdf * p, 0.0001);
         }
-        
-        float3 new_pos;
-        obj_data new_hit = raymarch(pos, w_i, new_pos);
+        float steps = 0;
+        new_hit = sphere_trace(pos + w_i * 0.001, w_i, new_pos, steps);
         
         if (length(new_hit.emission) > 0.0) {
             float3 new_light_norm = normalize(new_pos - light.pos);
@@ -177,7 +224,7 @@ float3 calcColor(uint3 id, inout uint rng_state) {
         float2 defocus_rand = random_point_on_circle(sample_rng) * _Defocus / _Width;
         float2 jitter_rand = random_point_on_circle(sample_rng) * _AA_jitter / _Width;
         
-        float3 cam_right = _CameraToWorld._m00_m10_m20; 
+        float3 cam_right = _CameraToWorld._m00_m10_m20;
         float3 cam_up = _CameraToWorld._m01_m11_m21;
         
         float3 rd_center = normalize(mul(_CameraToWorld, float4(target.xyz, 0)).xyz);
@@ -191,15 +238,34 @@ float3 calcColor(uint3 id, inout uint rng_state) {
         float3 rd = normalize(focal_point - ro);
         
         float3 pos;
-        obj_data hit = raymarch(ro, rd, pos);
-
-        if (hit.sdf < 0.0) {
-            totalCol += _bg_col;
-            continue;
+        float steps = 0;
+        obj_data hit;
+        if (_use_segment == 1) {
+            hit = segment_trace(ro, rd, pos, steps);
+        } else {
+            hit = sphere_trace(ro, rd, pos, steps);
         }
         
-        float3 sample_col = hit.emission + reflectedRadiance(hit, pos, ro, rd, sample_rng); //integrateFromHit(hit, pos, ro, rd, sample_rng);
-        totalCol += min(sample_col, float3(10.0, 10.0, 10.0));// prevents fireflies
+        totalCol += lerp(float3(0.0, 0.0, 1.0), float3(1.0, 0.0, 0.0), steps / 32.0);
+      
+
+        /*if (hit.sdf < 0.0) {
+            totalCol += _bg_col;
+            continue;
+        }*/
+        
+        /*float e = 0.001;
+        float3 grad = float3(
+            map(pos + float3(e, 0, 0), true).sdf - map(pos - float3(e, 0, 0), true).sdf,
+            map(pos + float3(0, e, 0), true).sdf - map(pos - float3(0, e, 0), true).sdf,
+            map(pos + float3(0, 0, e), true).sdf - map(pos - float3(0, 0, e), true).sdf
+            ) / (2.0 * e);
+
+            float k = length(grad);
+        return float3(k, k, k);*/
+        
+        //float3 sample_col = hit.emission + reflectedRadiance(hit, pos, ro, rd, sample_rng);
+        //totalCol += min(sample_col, float3(10.0, 10.0, 10.0)); // prevents fireflies
     }
     
     return totalCol / float(_SAMPLES);

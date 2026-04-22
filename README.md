@@ -1,6 +1,6 @@
 # Raymarched Path Tracer
 
-This is a PBR path tracer that uses raymarching instead of raytracing. This allows for SDF rendering, which most notably makes complex fractal geometry possible, among other things.
+This is a PBR path tracer that uses raymarching instead of raytracing. This allows for rendering of implicitly defined surfaces, which includes fractals and SDFs.
 
 ## Features
 

@@ -4,7 +4,7 @@ This is a PBR path tracer that uses raymarching instead of raytracing. This allo
 
 ## Features
 
-Next Event Estimation, Multiple Importance Sampling, Fresnel specular / Lambertian material properties, editable orbit traps for fully customizable fractal coloring, depth of field / AA, and smooth minimum for SDF blending.
+Most nobable is an implementation of Segment Tracing (Galin et al. 2020). This reduces iterations significantly, although some challenges with estimating the lipschitz bounds arise. Other features include Next Event Estimation, Multiple Importance Sampling, Fresnel specular / Lambertian material properties, editable orbit traps for fully customizable fractal coloring, depth of field / AA, and smooth minimum for SDF blending.
 
 ## Photos
 <img width="3840" alt="Image Sequence_013_0400" src="https://github.com/user-attachments/assets/a0333510-a970-4d6a-b91e-171ccaa57e38" />

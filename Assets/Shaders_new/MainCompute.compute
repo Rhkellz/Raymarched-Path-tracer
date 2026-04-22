@@ -34,8 +34,8 @@ obj_data sphere_trace(float3 ro, float3 rd, out float3 pos, out float steps) {
 }
 
 obj_data segment_trace(float3 ro, float3 rd, out float3 pos, out float steps) {
-    float kappa = 2.0; // Usually want this at 2
-    float epsilon_i = 1.2; // temp
+    float epsilon = 0.0002;
+    float epsilon_i = 10.0; // temp
     float t = 0.0;
     float step_incr = 0.0;
     float3 p = ro;
@@ -67,7 +67,7 @@ obj_data segment_trace(float3 ro, float3 rd, out float3 pos, out float steps) {
         
         t += step_incr;
         
-        epsilon_i = kappa * step_incr;
+        epsilon_i = _kappa * step_incr;
     }
     
     obj_data empty = make_empty_obj_data();
@@ -175,7 +175,12 @@ float3 reflectedRadiance(obj_data init_hit, float3 init_pos, float3 ro, float3 r
             throughput *= eval_diffuse_BRDF(hit, normal, -rd, w_i) * cos_theta / max(pdf * p, 0.0001);
         }
         float steps = 0;
-        new_hit = sphere_trace(pos + w_i * 0.001, w_i, new_pos, steps);
+        
+        if (_use_segment == 1) {
+            new_hit = segment_trace(pos + w_i * 0.001, w_i, new_pos, steps);
+        } else {
+            new_hit = sphere_trace(pos + w_i * 0.001, w_i, new_pos, steps);
+        }
         
         if (length(new_hit.emission) > 0.0) {
             float3 new_light_norm = normalize(new_pos - light.pos);
@@ -246,26 +251,17 @@ float3 calcColor(uint3 id, inout uint rng_state) {
             hit = sphere_trace(ro, rd, pos, steps);
         }
         
-        totalCol += lerp(float3(0.0, 0.0, 1.0), float3(1.0, 0.0, 0.0), steps / 32.0);
+        //totalCol += lerp(float3(0.0, 0.0, 1.0), float3(1.0, 0.0, 0.0), steps / 32.0);
       
 
-        /*if (hit.sdf < 0.0) {
+        if (hit.sdf < 0.0) {
             totalCol += _bg_col;
             continue;
-        }*/
-        
-        /*float e = 0.001;
-        float3 grad = float3(
-            map(pos + float3(e, 0, 0), true).sdf - map(pos - float3(e, 0, 0), true).sdf,
-            map(pos + float3(0, e, 0), true).sdf - map(pos - float3(0, e, 0), true).sdf,
-            map(pos + float3(0, 0, e), true).sdf - map(pos - float3(0, 0, e), true).sdf
-            ) / (2.0 * e);
+        }
 
-            float k = length(grad);
-        return float3(k, k, k);*/
         
-        //float3 sample_col = hit.emission + reflectedRadiance(hit, pos, ro, rd, sample_rng);
-        //totalCol += min(sample_col, float3(10.0, 10.0, 10.0)); // prevents fireflies
+        float3 sample_col = hit.emission + reflectedRadiance(hit, pos, ro, rd, sample_rng);
+        totalCol += min(sample_col, float3(10.0, 10.0, 10.0)); // prevents fireflies
     }
     
     return totalCol / float(_SAMPLES);

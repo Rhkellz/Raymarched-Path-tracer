@@ -99,29 +99,23 @@ bool isVisible(float3 pos, float3 dest, inout uint sample_rng) {
     return true;
 }
 
-float3 gradient(float3 p) {
-    float3 e_1 = float3(1.0, 0.0, 0.0);
-    float3 e_2 = float3(0.0, 1.0, 0.0);
-    float3 e_3 = float3(0.0, 0.0, 1.0);
-    
-    return (float3(map(p + e_1 * epsilon, true).sdf,
-                   map(p + e_2 * epsilon, true).sdf,
-                   map(p + e_3 * epsilon, true).sdf)
-          - float3(map(p - e_1 * epsilon, true).sdf,
-                   map(p - e_2 * epsilon, true).sdf,
-                   map(p - e_3 * epsilon, true).sdf)) / (2.0 * epsilon);
+float gradient_dir(float3 pos, float3 dir) { // https://www.shadertoy.com/view/wdGyDD
+    float epsilon = 0.0002;
+    return abs(map(pos + dir * epsilon, true).sdf - map(pos - dir * epsilon, true).sdf) / (2.0 * epsilon);
 }
 
 float local_lipschitz(float3 rd, segment seg, out obj_data d) {
     float result = -1.0;
     float3 p = seg.start;
-
+    float coeff = 0.0;
+    
     d = map(p, true); // return this for reuse later
     
     for (int i = 0; i <= _samples_per_segment; i++) {
         p = seg.start + (length(seg.end - seg.start) / float(_samples_per_segment)) * float(i) * rd;
         
-        float coeff = abs(dot(gradient(p), rd));
+        coeff = gradient_dir(p, rd);
+        
         /*if (i == 0) {
             coeff = abs(dot(gradient(p, d.sdf, true), rd));
         } else {

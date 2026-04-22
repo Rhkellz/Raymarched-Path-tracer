@@ -33,6 +33,8 @@ public class PathTracingCompute : MonoBehaviour {
     public bool segment_trace = true;
     [Range(1, 32)]
     public int samples_per_segment = 3;
+    [Range(0.1f, 10.0f)]
+    public float kappa = 2.0f;
     [Range(0.01f, 1f)]
     public float focal_length = 0.01f;
     [Range(0.00f, 5f)]
@@ -161,6 +163,7 @@ public class PathTracingCompute : MonoBehaviour {
 
         pathTracingCS.SetInt("_sceneMoving", sceneMoving);
         pathTracingCS.SetFloat("_CurrentSample", currentSample);
+        pathTracingCS.SetFloat("_kappa", kappa);
 
         pathTracingCS.SetInt("_samples_per_segment", samples_per_segment);
         if (segment_trace) {

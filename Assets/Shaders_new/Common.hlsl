@@ -44,7 +44,7 @@ float _orbit_sharp;
 int _samples_per_segment;
 int _use_segment;
 
-float epsilon = 0.0001;
+float _kappa;
 
 struct obj_data {
     float sdf;

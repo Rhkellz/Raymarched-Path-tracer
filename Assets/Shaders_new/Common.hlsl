@@ -46,6 +46,8 @@ int _use_segment;
 
 float _kappa;
 
+int _debug;
+
 struct obj_data {
     float sdf;
     float3 color;

@@ -275,10 +275,14 @@ MonoBehaviour:
   samplesPerPixel: 1
   maxBounces: 2
   smoothing: 0.0015
+  segment_trace: 1
+  samples_per_segment: 5
+  kappa: 2
   focal_length: 1
   Defocus: 0
   AA_jitter: 1
-  BG_color: {r: 0, g: 0, b: 0, a: 1}
+  debug_mode: 0
+  BG_color: {r: 1, g: 0.7028302, b: 0.7028302, a: 1}
   color_1: {r: 1, g: 0.43452328, b: 0.042452812, a: 1}
   orbit_1: {x: 0, y: 0, z: 0}
   radius_1: 0.3

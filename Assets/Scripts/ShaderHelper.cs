@@ -43,6 +43,9 @@ public class PathTracingCompute : MonoBehaviour {
     [Range(0.00f, 5f)]
     public float AA_jitter = 1.0f;
 
+    [Range(0, 2)]
+    public int debug_mode = 0;
+
     public Color BG_color = new Color(0.1f, 0.1f, 0.1f);
 
     public Color color_1 = new Color(1.0f, 1.0f, 1.0f);
@@ -171,7 +174,9 @@ public class PathTracingCompute : MonoBehaviour {
         } else {
             pathTracingCS.SetInt("_use_segment", 0);
         }
-        
+
+        pathTracingCS.SetInt("_debug", debug_mode);
+
         if (useAccumulation) {
             pathTracingCS.SetInt("_useAccumulation", 1);
         } else {

@@ -33,7 +33,7 @@ obj_data sphere_trace(float3 ro, float3 rd, out float3 pos, out float steps) {
     return empty;
 }
 
-obj_data segment_trace(float3 ro, float3 rd, out float3 pos, out float steps) {
+obj_data segment_trace(float3 ro, float3 rd, out float3 pos, out float steps, inout uint sample_rng) {
     float epsilon = 0.0002;
     float epsilon_i = 10.0; // temp
     float t = 0.0;
@@ -49,7 +49,7 @@ obj_data segment_trace(float3 ro, float3 rd, out float3 pos, out float steps) {
         curr_seg.end = ro + (t + epsilon_i) * rd;
         
         obj_data d;
-        float lipschitz = local_lipschitz(rd, curr_seg, d);
+        float lipschitz = local_lipschitz(rd, curr_seg, d, sample_rng); // find local lipschitz bound
         
         
         if (d.sdf < epsilon) {
@@ -63,7 +63,7 @@ obj_data segment_trace(float3 ro, float3 rd, out float3 pos, out float steps) {
         }
         
         step_incr = min(d.sdf / max(lipschitz, 0.01), epsilon_i);
-        step_incr = max(step_incr, epsilon);
+        step_incr = max(step_incr, epsilon); //safeguard to continue forward
         
         t += step_incr;
         
@@ -100,7 +100,6 @@ float3 reflectedRadiance(obj_data init_hit, float3 init_pos, float3 ro, float3 r
             rad += throughput * _bg_col;
             break;
         }
-        
         float3 normal = estimateNormal(pos);
         
         if (length(hit.emission) > 0.0) {
@@ -175,9 +174,8 @@ float3 reflectedRadiance(obj_data init_hit, float3 init_pos, float3 ro, float3 r
             throughput *= eval_diffuse_BRDF(hit, normal, -rd, w_i) * cos_theta / max(pdf * p, 0.0001);
         }
         float steps = 0;
-        
         if (_use_segment == 1) {
-            new_hit = segment_trace(pos + w_i * 0.001, w_i, new_pos, steps);
+            new_hit = segment_trace(pos + w_i * 0.001, w_i, new_pos, steps, sample_rng);
         } else {
             new_hit = sphere_trace(pos + w_i * 0.001, w_i, new_pos, steps);
         }
@@ -245,13 +243,24 @@ float3 calcColor(uint3 id, inout uint rng_state) {
         float3 pos;
         float steps = 0;
         obj_data hit;
+        
         if (_use_segment == 1) {
-            hit = segment_trace(ro, rd, pos, steps);
+            hit = segment_trace(ro, rd, pos, steps, sample_rng);
         } else {
             hit = sphere_trace(ro, rd, pos, steps);
         }
-        
-        //totalCol += lerp(float3(0.0, 0.0, 1.0), float3(1.0, 0.0, 0.0), steps / 32.0);
+        if (_debug == 1) {
+            totalCol += lerp(float3(0.0, 0.0, 1.0), float3(1.0, 0.0, 0.0), steps / 32.0);
+            break;
+        } else if (_debug == 2) {
+            if (hit.sdf > 0.0) {
+                totalCol += float3(1.0, 1.0, 1.0);
+            } else {
+                totalCol += float3(0.0, 0.0, 0.0);
+            }
+            break;
+
+        }
       
 
         if (hit.sdf < 0.0) {
@@ -261,7 +270,7 @@ float3 calcColor(uint3 id, inout uint rng_state) {
 
         
         float3 sample_col = hit.emission + reflectedRadiance(hit, pos, ro, rd, sample_rng);
-        totalCol += min(sample_col, float3(10.0, 10.0, 10.0)); // prevents fireflies
+        totalCol += sample_col; //min(sample_col, float3(10.0, 10.0, 10.0)); // prevents fireflies
     }
     
     return totalCol / float(_SAMPLES);
